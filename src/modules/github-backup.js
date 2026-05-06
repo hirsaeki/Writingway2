@@ -4,6 +4,7 @@
 (function () {
     const BACKUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
     let backupIntervalId = null;
+    const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
 
     const GitHubBackup = {
         /**
@@ -21,7 +22,7 @@
                     const user = await response.json();
                     return { valid: true, username: user.login };
                 }
-                return { valid: false, error: 'Invalid token' };
+                return { valid: false, error: tr(null, 'alerts.invalidGithubTokenShort') };
             } catch (e) {
                 return { valid: false, error: e.message };
             }
@@ -88,13 +89,13 @@
          */
         async backupToGist(app) {
             if (!app.githubToken || !app.currentProject) {
-                return { success: false, error: 'No token or project' };
+                return { success: false, error: tr(app, 'alerts.noTokenOrProject') };
             }
 
             try {
                 const projectData = await this.exportProjectData(app);
                 if (!projectData) {
-                    return { success: false, error: 'No project data' };
+                    return { success: false, error: tr(app, 'alerts.noProjectData') };
                 }
 
                 const filename = `${app.currentProject.name.replace(/[^a-z0-9]/gi, '_')}_backup.json`;
@@ -173,7 +174,7 @@
          */
         async listBackups(app) {
             if (!app.githubToken || !app.currentProjectGistId) {
-                return { success: false, error: 'No token or gist ID' };
+                return { success: false, error: tr(app, 'alerts.noTokenOrGist') };
             }
 
             try {
@@ -213,7 +214,7 @@
          */
         async restoreFromBackup(app, versionUrl) {
             if (!app.githubToken) {
-                return { success: false, error: 'No token' };
+                return { success: false, error: tr(app, 'alerts.noToken') };
             }
 
             try {
@@ -233,7 +234,7 @@
                 const firstFile = Object.values(files)[0];
 
                 if (!firstFile) {
-                    return { success: false, error: 'No backup data found' };
+                    return { success: false, error: tr(app, 'alerts.noBackupData') };
                 }
 
                 const backupData = JSON.parse(firstFile.content);
@@ -306,19 +307,19 @@
 
             backupIntervalId = setInterval(async () => {
                 if (app.backupEnabled && app.githubToken && app.currentProject) {
-                    app.backupStatus = 'Backing up...';
+                    app.backupStatus = tr(app, 'status.backingUp');
                     const result = await this.backupToGist(app);
 
                     if (result.success) {
                         app.lastBackupTime = new Date();
-                        app.backupStatus = 'Backed up';
+                        app.backupStatus = tr(app, 'status.backedUp');
                         if (result.gistId) {
                             app.currentProjectGistId = result.gistId;
                             this.saveBackupSettings(app);
                         }
                         console.log('✓ Auto-backup successful');
                     } else {
-                        app.backupStatus = 'Backup failed';
+                        app.backupStatus = tr(app, 'status.backupFailed');
                         console.error('Auto-backup failed:', result.error);
                     }
                 }

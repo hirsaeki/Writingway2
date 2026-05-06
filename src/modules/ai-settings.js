@@ -1,6 +1,8 @@
 // AI Settings Module
 // Handles AI configuration: provider selection, model fetching, settings persistence, connection testing
 (function () {
+    const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+
     const AISettings = {
         /**
          * Fetch available models from the current provider
@@ -125,20 +127,10 @@
                 // Note: Browser can't actually scan filesystem
                 // The model name here is just for display - the actual model is whatever
                 // llama-server.exe loaded from the models folder when you ran start.bat
-                alert('ℹ️ Local GGUF Model Info:\n\n' +
-                    'The browser cannot scan your models folder directly.\n\n' +
-                    'The model shown here is just for display.\n\n' +
-                    '✓ Your ACTUAL model is whatever start.bat loaded into llama-server\n' +
-                    '✓ Connection URL: http://localhost:8080\n\n' +
-                    'To change models:\n' +
-                    '1. Close all Writingway windows\n' +
-                    '2. Put a different .gguf file in the models folder\n' +
-                    '3. Run start.bat again (it will use the first .gguf file it finds)\n\n' +
-                    'NOTE: If you want to use LM Studio or Ollama,\n' +
-                    'select "API / Local API" mode instead.');
+                alert(tr(app, 'alerts.localModelInfo'));
             } catch (e) {
                 console.error('Failed to scan models:', e);
-                alert('Could not scan models folder');
+                alert(tr(app, 'alerts.scanModelsFailed'));
             }
         },
 
@@ -187,7 +179,7 @@
 
                 // Test connection
                 app.showModelLoading = true;
-                app.loadingMessage = 'Testing connection...';
+                app.loadingMessage = tr(app, 'status.testingConnection');
                 app.loadingProgress = 50;
 
                 if (app.aiMode === 'local') {
@@ -198,7 +190,7 @@
                     let attempt = 0;
                     let connected = false;
 
-                    app.loadingMessage = 'Connecting to local server... (model may be loading, this can take a while for large models)';
+                    app.loadingMessage = tr(app, 'loading.connectingLocalAi');
 
                     while (attempt < maxRetries && !connected) {
                         try {
@@ -207,7 +199,7 @@
                             app.loadingProgress = Math.floor(progress);
 
                             const elapsed = Math.floor((attempt * retryDelay) / 1000);
-                            app.loadingMessage = `Testing connection... (${elapsed}s elapsed, attempt ${attempt}/${maxRetries})`;
+                            app.loadingMessage = `${tr(app, 'status.testingConnection')} (${elapsed}s, ${attempt}/${maxRetries})`;
 
                             const controller = new AbortController();
                             const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout per request
@@ -220,11 +212,11 @@
                             if (response.ok) {
                                 connected = true;
                                 app.aiStatus = 'ready';
-                                app.aiStatusText = 'AI Ready (Local)';
+                                app.aiStatusText = tr(app, 'status.aiReadyLocal');
                                 app.loadingProgress = 100;
-                                app.loadingMessage = 'Connected!';
+                                app.loadingMessage = tr(app, 'status.connected');
                                 setTimeout(() => { app.showModelLoading = false; }, 500);
-                                alert(`✓ Connected to local server successfully! (took ${elapsed}s)`);
+                                alert(tr(app, 'alerts.connectedLocal', { seconds: elapsed }));
                                 break;
                             }
                         } catch (err) {
@@ -237,14 +229,14 @@
 
                     if (!connected) {
                         const elapsed = Math.floor((attempt * retryDelay) / 1000);
-                        throw new Error(`Could not connect to local server after ${elapsed}s. Make sure llama.cpp server is running and the model is loaded. Large models can take several minutes to load - you may need to wait and try again.`);
+                        throw new Error(tr(app, 'alerts.localConnectFailed', { seconds: elapsed }));
                     }
                 } else if (app.aiProvider === 'lmstudio') {
                     // Test LM Studio connection via /v1/models endpoint
                     // Normalize endpoint: strip trailing slashes and any /v1/* paths
                     let endpoint = (app.aiEndpoint || 'http://localhost:1234').replace(/\/+$/, '');
                     endpoint = endpoint.replace(/\/v1(\/.*)?$/, '');
-                    app.loadingMessage = 'Connecting to LM Studio...';
+                    app.loadingMessage = tr(app, 'loading.connectedTo', { provider: 'LM Studio' });
 
                     try {
                         const controller = new AbortController();
@@ -276,24 +268,24 @@
 
                             const modelCount = app.providerModels.lmstudio.length;
                             app.aiStatus = 'ready';
-                            app.aiStatusText = `AI Ready (LM Studio)`;
+                            app.aiStatusText = tr(app, 'status.aiReadyWithModel', { model: 'LM Studio' });
                             app.loadingProgress = 100;
-                            app.loadingMessage = 'Connected!';
+                            app.loadingMessage = tr(app, 'status.connected');
                             setTimeout(() => { app.showModelLoading = false; }, 500);
-                            alert(`✓ Connected to LM Studio! Found ${modelCount} model(s).`);
+                            alert(tr(app, 'alerts.connectedLmStudio', { count: modelCount }));
                         } else {
-                            throw new Error(`LM Studio returned status ${response.status}`);
+                            throw new Error(tr(app, 'alerts.lmStudioStatus', { status: response.status }));
                         }
                     } catch (err) {
-                        throw new Error(`Could not connect to LM Studio at ${endpoint}. Make sure LM Studio is running and has a model loaded. Error: ${err.message}`);
+                        throw new Error(tr(app, 'alerts.lmStudioConnectFailed', { endpoint, error: err.message }));
                     }
                 } else {
                     // Test API connection (basic validation)
                     if (!app.aiApiKey && app.aiProvider !== 'lmstudio') {
-                        throw new Error('API key is required');
+                        throw new Error(tr(app, 'alerts.apiKeyRequired'));
                     }
                     if (!app.aiModel && app.aiProvider !== 'lmstudio') {
-                        throw new Error('Model name is required');
+                        throw new Error(tr(app, 'alerts.modelNameRequired'));
                     }
 
                     // Get the display name for the model
@@ -306,19 +298,19 @@
                     }
 
                     app.aiStatus = 'ready';
-                    app.aiStatusText = `AI Ready (${modelDisplayName})`;
+                    app.aiStatusText = tr(app, 'status.aiReadyWithModel', { model: modelDisplayName });
                     app.loadingProgress = 100;
                     setTimeout(() => { app.showModelLoading = false; }, 500);
-                    alert('✓ API settings saved! Ready to generate.');
+                    alert(tr(app, 'alerts.apiSaved'));
                 }
 
                 app.showAISettings = false;
             } catch (e) {
                 console.error('AI settings save/test failed:', e);
                 app.aiStatus = 'error';
-                app.aiStatusText = 'Connection failed';
+                app.aiStatusText = tr(app, 'status.connectionFailed');
                 app.showModelLoading = false;
-                alert('Connection failed: ' + (e.message || e));
+                alert(tr(app, 'alerts.connectionFailed', { error: e.message || e }));
             }
         },
 

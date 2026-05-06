@@ -13,7 +13,9 @@
 
         window.__test.getApp = function () {
             const el = document.querySelector('[x-data="app"]');
-            return (el && el.__x && el.__x.$data) ? el.__x.$data : null;
+            return window.__writingwayApp ||
+                ((el && el.__x && el.__x.$data) ? el.__x.$data : null) ||
+                ((el && el._x_dataStack && el._x_dataStack[0]) ? el._x_dataStack[0] : null);
         };
 
         window.__test.seedProject = async function (name) {

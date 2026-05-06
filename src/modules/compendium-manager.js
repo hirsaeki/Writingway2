@@ -1,6 +1,8 @@
 // Compendium Manager Module
 // Handles all compendium-level operations: categories, entries, tags, images, ordering
 (function () {
+    const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+
     const CompendiumManager = {
         /**
          * Check if the current compendium entry has unsaved changes
@@ -274,7 +276,7 @@
          */
         async _doCreateCompendiumEntry(app, category) {
             try {
-                const entry = await window.Compendium.createEntry(app.currentProject.id, { category, title: 'New Entry', body: '' });
+                const entry = await window.Compendium.createEntry(app.currentProject.id, { category, title: tr(app, 'compendium.newEntry'), body: '' });
                 // Ensure category is open
                 if (!app.openCompCategories.includes(category)) {
                     app.openCompCategories.push(category);
@@ -325,7 +327,7 @@
         async saveCompendiumEntry(app) {
             if (!app.currentCompEntry || !app.currentCompEntry.id) return;
             try {
-                app.compendiumSaveStatus = 'Saving...';
+                app.compendiumSaveStatus = tr(app, 'status.saving');
                 const entryCategory = app.currentCompEntry.category;
                 const updates = {
                     title: app.currentCompEntry.title || '',
@@ -340,11 +342,11 @@
                 await this.loadCompendiumCounts(app);
                 // Reset dirty state after successful save
                 this.storeCompendiumOriginal(app);
-                app.compendiumSaveStatus = 'Saved';
+                app.compendiumSaveStatus = tr(app, 'status.saved');
                 setTimeout(() => { app.compendiumSaveStatus = ''; }, 2000);
             } catch (e) {
                 console.error('Failed to save compendium entry:', e);
-                app.compendiumSaveStatus = 'Error';
+                app.compendiumSaveStatus = tr(app, 'status.error');
                 setTimeout(() => { app.compendiumSaveStatus = ''; }, 3000);
             }
         },
@@ -414,7 +416,7 @@
          */
         confirmRemoveCompImage(app) {
             if (!app.currentCompEntry || !app.currentCompEntry.imageUrl) return;
-            if (confirm('Remove this image from the entry?')) {
+            if (confirm(tr(app, 'alerts.removeCompImage'))) {
                 app.currentCompEntry.imageUrl = null;
                 this.updateCompendiumDirtyFlag(app);
             }
@@ -427,7 +429,7 @@
          */
         async deleteCompendiumEntry(app, id) {
             if (!id) return;
-            if (!confirm('Delete this compendium entry?')) return;
+            if (!confirm(tr(app, 'alerts.deleteCompendiumEntry'))) return;
             try {
                 // Get the entry's category before deleting
                 const entry = await window.Compendium.getEntry(id);

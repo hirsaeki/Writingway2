@@ -1,6 +1,8 @@
 // AI initialization helper
 // Exposes window.AI.init(app) which performs the model health check and updates the app state
 (function () {
+    const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+
     async function init(app) {
         try {
             // Check what mode the user has configured
@@ -14,7 +16,7 @@
             // If using API mode and has API key (or provider doesn't need one), mark as ready
             if (aiMode === 'api' && (hasApiKey || noKeyRequired)) {
                 if (app.updateLoadingScreen) {
-                    app.updateLoadingScreen(60, 'AI Ready', `Connected to ${provider}`);
+                    app.updateLoadingScreen(60, tr(app, 'loading.aiReady'), tr(app, 'loading.connectedTo', { provider }));
                 }
                 app.aiStatus = 'ready';
 
@@ -27,7 +29,7 @@
                     }
                 }
 
-                app.aiStatusText = modelDisplayName ? `AI Ready (${modelDisplayName})` : `AI Ready (${provider})`;
+                app.aiStatusText = tr(app, 'status.aiReadyWithModel', { model: modelDisplayName || provider });
                 console.log(`✓ AI configured with ${provider}${noKeyRequired ? ' (no API key required)' : ''}`);
                 return;
             }
@@ -35,10 +37,9 @@
             // If using local mode, try to connect to llama-server
             if (aiMode === 'local') {
                 if (app.updateLoadingScreen) {
-                    app.updateLoadingScreen(55, 'Connecting to AI...', 'Checking local server...');
+                    app.updateLoadingScreen(55, tr(app, 'loading.connectingAi'), tr(app, 'loading.checkingLocalServer'));
                 }
-                app.showModelLoading = true;
-                app.loadingMessage = 'Connecting to local AI server...';
+                app.loadingMessage = tr(app, 'loading.connectingLocalAi');
                 app.loadingProgress = 30;
 
                 const endpoint = app.aiEndpoint || 'http://localhost:8080';
@@ -49,15 +50,15 @@
 
                 if (response.ok) {
                     if (app.updateLoadingScreen) {
-                        app.updateLoadingScreen(65, 'AI Connected!', 'Local server is ready');
+                        app.updateLoadingScreen(65, tr(app, 'loading.aiConnected'), tr(app, 'loading.localServerReady'));
                     }
                     app.loadingProgress = 100;
-                    app.loadingMessage = 'Connected to AI!';
+                    app.loadingMessage = tr(app, 'loading.connectedToAi');
 
                     await new Promise(resolve => setTimeout(resolve, 500));
 
                     app.aiStatus = 'ready';
-                    app.aiStatusText = 'AI Ready (Local Server)';
+                    app.aiStatusText = tr(app, 'status.aiReadyLocalServer');
                     app.showModelLoading = false;
 
                     console.log('✓ Connected to llama-server successfully');
@@ -67,10 +68,10 @@
 
             // If we get here, no AI is configured
             if (app.updateLoadingScreen) {
-                app.updateLoadingScreen(60, 'AI not configured', 'You can set this up later');
+                app.updateLoadingScreen(60, tr(app, 'loading.aiNotConfigured'), tr(app, 'loading.setupLater'));
             }
             app.aiStatus = 'not-configured';
-            app.aiStatusText = 'Configure AI';
+            app.aiStatusText = tr(app, 'status.configureAi');
             app.showModelLoading = false;
 
             // Detailed logging for debugging configuration issues
@@ -91,17 +92,17 @@
 
             if (app.aiMode === 'local') {
                 if (app.updateLoadingScreen) {
-                    app.updateLoadingScreen(60, 'Local AI offline', 'You can configure this later');
+                    app.updateLoadingScreen(60, tr(app, 'loading.localAiOffline'), tr(app, 'loading.setupLater'));
                 }
                 app.aiStatus = 'error';
-                app.aiStatusText = 'Local server offline';
+                app.aiStatusText = tr(app, 'status.localServerOffline');
                 console.log('💡 To use local AI: Run start.bat or configure an API provider');
             } else {
                 if (app.updateLoadingScreen) {
-                    app.updateLoadingScreen(60, 'AI not configured', 'Configure in settings');
+                    app.updateLoadingScreen(60, tr(app, 'loading.aiNotConfigured'), tr(app, 'loading.configureInSettings'));
                 }
                 app.aiStatus = 'not-configured';
-                app.aiStatusText = 'Configure AI';
+                app.aiStatusText = tr(app, 'status.configureAi');
                 console.log('💡 Click "Configure AI" to set up an API provider');
             }
 

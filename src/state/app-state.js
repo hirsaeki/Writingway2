@@ -12,6 +12,7 @@ function createAppState() {
         selectedProjectId: null,
 
         // ========== UI Modal State ==========
+        language: window.I18n ? window.I18n.getLanguage() : 'ja',
         showRenameProjectModal: false,
         renameProjectName: '',
         showExportModal: false,
@@ -107,7 +108,7 @@ function createAppState() {
         beatInput: '',
         isGenerating: false,
         isSaving: false,
-        saveStatus: 'Saved',
+        saveStatus: window.t ? window.t('status.saved') : '保存済み',
         saveTimeout: null,
 
         // ========== Generation Acceptance Flow ==========
@@ -193,9 +194,9 @@ function createAppState() {
         // ========== AI Worker State ==========
         aiWorker: null,
         aiStatus: 'loading', // 'loading', 'ready', 'error'
-        aiStatusText: 'Initializing...',
+        aiStatusText: window.t ? window.t('loading.initializing') : '初期化しています...',
         showModelLoading: false,
-        loadingMessage: 'Setting up AI...',
+        loadingMessage: window.t ? window.t('loading.settingUpAi') : 'AIを準備しています',
         loadingProgress: 0,
         isInitializing: true, // Flag to prevent watchers from firing during init
 

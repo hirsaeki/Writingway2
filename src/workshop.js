@@ -3,6 +3,8 @@
  * Handles AI-powered brainstorming chat with context from the project
  */
 
+const workshopTr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+
 window.workshopChat = {
     /**
      * Initialize a new workshop chat session
@@ -12,7 +14,7 @@ window.workshopChat = {
         const count = app && app.workshopSessions ? app.workshopSessions.length + 1 : 1;
         return {
             id: `ws_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
-            name: `Chat ${count}`,
+            name: `${workshopTr(app, 'workshop.defaultChatName')} ${count}`,
             messages: [],
             createdAt: new Date().toISOString()
         };
@@ -236,7 +238,8 @@ window.workshopChat = {
 
         // Check if this is the first user message in the session
         const isFirstMessage = currentSession.messages.filter(m => m.role === 'user').length === 0;
-        const hasDefaultName = /^Chat \d+$/.test(currentSession.name);
+        const defaultChatName = workshopTr(app, 'workshop.defaultChatName');
+        const hasDefaultName = /^Chat \d+$/.test(currentSession.name) || currentSession.name === `${defaultChatName} ${app.currentWorkshopSessionIndex + 1}`;
 
         // Add user message to session
         currentSession.messages.push({
@@ -275,7 +278,7 @@ window.workshopChat = {
 
             // Check if Generation module is available
             if (!window.Generation || typeof window.Generation.streamGeneration !== 'function') {
-                throw new Error('Generation module not available');
+                throw new Error(workshopTr(app, 'alerts.generationModuleUnavailable'));
             }
 
             // Stream the AI response
@@ -299,7 +302,7 @@ window.workshopChat = {
             // Notify user if response was truncated
             if (result?.finishReason === 'length' || result?.finishReason === 'MAX_TOKENS') {
                 console.warn('⚠️ Workshop chat hit token limit');
-                alert('⚠️ The response reached the token limit and may be incomplete.\n\nTip: Increase "Max Length" in AI Settings (⚙️) for longer responses.');
+                alert(workshopTr(app, 'alerts.workshopTokenLimit'));
             }
 
             // Save sessions to database first
@@ -341,7 +344,7 @@ window.workshopChat = {
         } catch (error) {
             console.error('Workshop chat error:', error);
             console.error('Error stack:', error.stack);
-            currentSession.messages[assistantMessageIndex].content = `Error: ${error.message}`;
+            currentSession.messages[assistantMessageIndex].content = workshopTr(app, 'workshop.errorPrefix', { error: error.message });
             currentSession.messages[assistantMessageIndex].isError = true;
             currentSession.messages = [...currentSession.messages];
         } finally {
@@ -571,7 +574,7 @@ window.workshopChat = {
 
             if (!firstMessage || !firstMessage.trim()) {
                 console.warn('generateChatName: Empty message provided, returning default name');
-                return 'New Chat';
+                return workshopTr(app, 'workshop.defaultChatName');
             }
 
             const messageContent = firstMessage.trim();
@@ -592,14 +595,14 @@ window.workshopChat = {
             for (let i = 0; i < namePrompt.length; i++) {
                 if (!namePrompt[i].content || !namePrompt[i].content.trim()) {
                     console.error(`generateChatName: Message at index ${i} has empty content!`);
-                    return 'New Chat';
+                    return workshopTr(app, 'workshop.defaultChatName');
                 }
             }
 
             // Validate that Generation module is available
             if (!window.Generation || typeof window.Generation.streamGeneration !== 'function') {
                 console.warn('Generation module not available for chat naming');
-                return 'New Chat';
+                return workshopTr(app, 'workshop.defaultChatName');
             }
 
             console.log('Sending name generation request with prompt:', JSON.stringify(namePrompt));
@@ -620,11 +623,11 @@ window.workshopChat = {
             console.log('Generated chat name:', generatedName);
 
             // Return the generated name or a fallback
-            return generatedName || 'New Chat';
+            return generatedName || workshopTr(app, 'workshop.defaultChatName');
         } catch (error) {
             console.error('Failed to generate chat name:', error);
             console.error('Error details:', error.message, error.stack);
-            return 'New Chat'; // Fallback to default
+            return workshopTr(app, 'workshop.defaultChatName'); // Fallback to default
         }
     }
 };

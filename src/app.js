@@ -34,6 +34,90 @@ document.addEventListener('alpine:init', () => {
                 return total;
             },
 
+            t(key, params, fallback) {
+                // Touch reactive language so Alpine re-renders translated expressions on change.
+                const lang = this.language;
+                return window.t ? window.t(key, params, fallback) : (fallback || key || lang);
+            },
+
+            setLanguage(lang) {
+                this.language = window.I18n ? window.I18n.setLanguage(lang) : lang;
+                this.refreshLocalizedStatus();
+                this.$nextTick(() => {
+                    if (window.I18n) window.I18n.translateDocument(document);
+                });
+            },
+
+            getLocale() {
+                return window.I18n ? window.I18n.locale() : (this.language === 'ja' ? 'ja-JP' : 'en-US');
+            },
+
+            formatDate(value) {
+                if (!value) return '';
+                return new Date(value).toLocaleDateString(this.getLocale());
+            },
+
+            formatDateTime(value) {
+                if (!value) return '';
+                return new Date(value).toLocaleString(this.getLocale());
+            },
+
+            wordCountText(count) {
+                return this.t('common.wordCount', { count: count || 0 });
+            },
+
+            messageCountText(count) {
+                return this.t('common.msgCount', { count: count || 0 });
+            },
+
+            promptCategoryLabel(category) {
+                return this.t(`prompts.category.${category}`, {}, category);
+            },
+
+            compendiumCategoryLabel(category) {
+                return this.t(`compendium.category.${category}`, {}, category);
+            },
+
+            summaryStatusText(item) {
+                if (item && item.summary) {
+                    return item.summaryStale ? this.t('summaryStatus.outdated') : this.t('summaryStatus.has');
+                }
+                return this.t('summaryStatus.none');
+            },
+
+            summaryStatusTitle(title, item) {
+                return this.t('summaryStatus.forTitle', { title: title || '', status: this.summaryStatusText(item) });
+            },
+
+            messageRoleLabel(msg) {
+                return msg && msg.role === 'user' ? this.t('workshop.you') : (msg && msg.isError ? this.t('workshop.error') : this.t('workshop.assistant'));
+            },
+
+            refreshLocalizedStatus() {
+                const translateIfKnown = (value, keys) => {
+                    for (const key of keys) {
+                        const en = window.i18n && window.i18n.en ? key.split('.').reduce((o, p) => o && o[p], window.i18n.en) : null;
+                        const ja = window.i18n && window.i18n.ja ? key.split('.').reduce((o, p) => o && o[p], window.i18n.ja) : null;
+                        if (value === en || value === ja) return this.t(key);
+                    }
+                    return value;
+                };
+                const statusKeys = [
+                    'status.saved', 'status.saving', 'status.unsaved', 'status.error', 'status.cancelled',
+                    'status.noScene', 'status.readOnlyTab', 'status.summarySaved', 'status.backingUp',
+                    'status.backedUp', 'status.backupFailed', 'status.loadingBackups', 'status.failedToLoad',
+                    'status.restored', 'status.restoreFailed', 'status.validatingToken', 'status.tokenInvalid',
+                    'status.autoBackupEnabled', 'status.autoBackupDisabled', 'status.restoring', 'status.testingConnection',
+                    'status.connected', 'status.connectionFailed', 'status.configureAi', 'status.localServerOffline'
+                ];
+                this.saveStatus = translateIfKnown(this.saveStatus, statusKeys);
+                this.compendiumSaveStatus = translateIfKnown(this.compendiumSaveStatus, statusKeys);
+                this.backupStatus = translateIfKnown(this.backupStatus, statusKeys);
+                this.loadingMessage = translateIfKnown(this.loadingMessage, ['loading.settingUpAi', 'status.testingConnection', 'status.connected']);
+                if (this.aiStatus === 'not-configured') this.aiStatusText = this.t('status.configureAi');
+                if (this.aiStatus === 'error' && this.aiMode === 'local') this.aiStatusText = this.t('status.localServerOffline');
+            },
+
             // Alpine lifecycle - setup watchers and initialize
             init() {
                 // Setup reactive watchers (Phase 2 refactoring)
@@ -81,43 +165,40 @@ document.addEventListener('alpine:init', () => {
 
             // Initialize
             async init() {
-                this.updateLoadingScreen(10, 'Initializing...', 'Checking startup method...');
+                window.__writingwayApp = this;
+                if (this.$el) {
+                    this.$el.__x = this.$el.__x || {};
+                    this.$el.__x.$data = this;
+                }
+                this.updateLoadingScreen(10, this.t('loading.initializing'), this.t('loading.startupMethod'));
 
                 // Detect if opened via file:// protocol and warn user
                 if (window.location.protocol === 'file:') {
                     const useFileDirect = confirm(
-                        '⚠️ IMPORTANT: Data Storage Location\n\n' +
-                        'You opened Writingway directly (file://) instead of using start.bat\n\n' +
-                        'This means:\n' +
-                        '• Your projects are stored in a DIFFERENT database than start.bat\n' +
-                        '• Local AI server will NOT be running\n' +
-                        '• You cannot use local models without start.bat\n\n' +
-                        'RECOMMENDATION: Close this and run start.bat instead.\n\n' +
-                        'Click OK to continue anyway (different database)\n' +
-                        'Click Cancel to see instructions'
+                        this.t('startup.fileProtocolConfirm')
                     );
 
                     if (!useFileDirect) {
                         document.body.innerHTML = `
                         <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#1a1a1a;color:#e0e0e0;font-family:system-ui,-apple-system,sans-serif;padding:20px;">
                             <div style="max-width:600px;background:#2a2a2a;border:2px solid #4a9eff;border-radius:12px;padding:32px;">
-                                <h1 style="margin:0 0 16px 0;color:#4a9eff;font-size:24px;">🚀 How to Start Writingway</h1>
+                                <h1 style="margin:0 0 16px 0;color:#4a9eff;font-size:24px;">🚀 ${this.t('startup.fileProtocolTitle')}</h1>
                                 <ol style="line-height:1.8;padding-left:24px;margin:16px 0;">
-                                    <li>Close this browser tab</li>
-                                    <li>Navigate to your Writingway folder: <code style="background:#1a1a1a;padding:2px 6px;border-radius:4px;">E:\\Writingway2</code></li>
-                                    <li>Double-click <code style="background:#1a1a1a;padding:2px 6px;border-radius:4px;color:#4a9eff;font-weight:600;">start.bat</code></li>
+                                    <li>${this.t('startup.closeTab')}</li>
+                                    <li>${this.t('startup.navigateFolder')} <code style="background:#1a1a1a;padding:2px 6px;border-radius:4px;">E:\\Writingway2</code></li>
+                                    <li>${this.t('startup.doubleClickStart')} <code style="background:#1a1a1a;padding:2px 6px;border-radius:4px;color:#4a9eff;font-weight:600;">start.bat</code></li>
                                 </ol>
                                 <div style="background:rgba(74,158,255,0.1);border:1px solid rgba(74,158,255,0.3);border-radius:8px;padding:16px;margin-top:20px;">
-                                    <p style="margin:0;font-size:14px;"><strong>Why?</strong></p>
+                                    <p style="margin:0;font-size:14px;"><strong>${this.t('startup.why')}</strong></p>
                                     <p style="margin:8px 0 0 0;font-size:13px;line-height:1.6;">
-                                        start.bat ensures:<br>
-                                        • Unified project database (http://localhost:8000)<br>
-                                        • Local AI server running with GPU support<br>
-                                        • Fast model loading (2-3 seconds vs minutes)<br>
-                                        • Proper CORS and security settings
+                                        ${this.t('startup.startEnsures')}<br>
+                                        • ${this.t('startup.unifiedDatabase')}<br>
+                                        • ${this.t('startup.localAiServer')}<br>
+                                        • ${this.t('startup.fastModelLoading')}<br>
+                                        • ${this.t('startup.properCors')}
                                     </p>
                                 </div>
-                                <button onclick="window.close()" style="margin-top:20px;padding:10px 20px;background:#4a9eff;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">Close This Tab</button>
+                                <button onclick="window.close()" style="margin-top:20px;padding:10px 20px;background:#4a9eff;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;">${this.t('startup.closeThisTab')}</button>
                             </div>
                         </div>
                     `;
@@ -125,25 +206,32 @@ document.addEventListener('alpine:init', () => {
                     }
                 }
 
-                this.updateLoadingScreen(20, 'Loading projects...', 'Accessing local database...');
+                this.updateLoadingScreen(20, this.t('loading.projects'), this.t('loading.database'));
 
                 // Load projects and show projects view instead of auto-loading
                 try {
                     await this.loadProjects();
                     // One-time migration: ensure scenes have a projectId so they are discoverable
                     try { await this.migrateMissingSceneProjectIds(); } catch (e) { /* ignore */ }
-                    // Show projects landing page
-                    this.showProjectsView = true;
+                    const lastProjectId = localStorage.getItem('writingway:lastProject');
+                    const shouldRestoreLastProject = lastProjectId && this.projects.some(p => p.id === lastProjectId);
+                    if (shouldRestoreLastProject) {
+                        this.showProjectsView = false;
+                        await this.selectProject(lastProjectId);
+                    } else {
+                        // Show projects landing page when there is no valid recent project
+                        this.showProjectsView = true;
+                    }
                 } catch (e) {
                     console.error('Failed to load projects:', e);
                 }
 
-                this.updateLoadingScreen(40, 'Loading AI settings...', 'Configuring generation parameters...');
+                this.updateLoadingScreen(40, this.t('loading.aiSettings'), this.t('loading.generationParams'));
 
                 // Load AI settings from localStorage
                 await this.loadAISettings();
 
-                this.updateLoadingScreen(50, 'Initializing AI...', 'This may take 2-3 minutes on first run...');
+                this.updateLoadingScreen(50, this.t('loading.initializingAi'), this.t('loading.aiFirstRun'));
 
                 // Initialize tab sync for multi-tab coordination
                 if (window.TabSync && typeof window.TabSync.init === 'function') {
@@ -162,13 +250,13 @@ document.addEventListener('alpine:init', () => {
                     } catch (e) {
                         console.error('AI init failed:', e);
                         this.aiStatus = 'error';
-                        this.aiStatusText = 'AI init failed';
+                        this.aiStatusText = this.t('status.aiInitFailed');
                         this.showModelLoading = false;
                     }
                 } else {
                     // Fallback if ai.js is not loaded
                     this.aiStatus = 'error';
-                    this.aiStatusText = 'AI module missing';
+                    this.aiStatusText = this.t('status.aiModuleMissing');
                     this.showModelLoading = false;
                 }
 
@@ -234,7 +322,7 @@ document.addEventListener('alpine:init', () => {
                     } catch (e) { /* ignore */ }
                 }, true);
 
-                this.updateLoadingScreen(70, 'Loading features...', 'Setting up text-to-speech and updates...');
+                this.updateLoadingScreen(70, this.t('loading.features'), this.t('loading.featuresTip'));
 
                 // Check for updates on startup (silent mode)
                 if (window.UpdateChecker) {
@@ -260,7 +348,7 @@ document.addEventListener('alpine:init', () => {
                 // Load light mode preference early to avoid flash
                 this.loadLightModePreference();
 
-                this.updateLoadingScreen(85, 'Almost ready...', 'Finalizing setup...');
+                this.updateLoadingScreen(85, this.t('loading.almostReady'), this.t('loading.finalizing'));
 
                 // Selection change handler: show Rewrite button when text is selected
                 const self = this;
@@ -333,7 +421,7 @@ document.addEventListener('alpine:init', () => {
                 }
 
                 // Final step: hide loading screen
-                this.updateLoadingScreen(100, 'Ready!', 'Welcome to Writingway');
+                this.updateLoadingScreen(100, this.t('loading.ready'), this.t('loading.welcome'));
                 setTimeout(() => {
                     this.hideLoadingScreen();
                     // Now that initialization is complete, enable watchers
@@ -398,7 +486,7 @@ document.addEventListener('alpine:init', () => {
             // TTS: Toggle reading current scene aloud
             toggleTTS() {
                 if (!window.TTS) {
-                    alert('Text-to-Speech not available');
+                    alert(this.t('alerts.ttsUnavailable'));
                     return;
                 }
 
@@ -409,12 +497,12 @@ document.addEventListener('alpine:init', () => {
                 } else {
                     // Start reading current scene (only works in preview mode)
                     if (!this.currentScene) {
-                        alert('No scene selected to read');
+                        alert(this.t('alerts.noSceneToRead'));
                         return;
                     }
 
                     if (!this.showMarkdownPreview) {
-                        alert('Switch to Preview mode to use Read Aloud');
+                        alert(this.t('alerts.previewForTts'));
                         return;
                     }
 
@@ -423,7 +511,7 @@ document.addEventListener('alpine:init', () => {
                     const text = preview ? preview.innerText.trim() : '';
 
                     if (!text || text.length === 0) {
-                        alert('Scene is empty - nothing to read');
+                        alert(this.t('alerts.emptyScene'));
                         return;
                     }
 
@@ -612,7 +700,7 @@ document.addEventListener('alpine:init', () => {
                     // If we have a summary prompt and AI is ready, use AI
                     if (usePrompt && window.Generation && this.aiStatus === 'ready') {
                         try {
-                            this.summaryText = 'Generating summary...';
+                            this.summaryText = this.t('status.generatingSummary');
                             const promptText = usePrompt.content || '';
 
                             // Build proper messages array with system instruction and user content
@@ -628,7 +716,7 @@ document.addEventListener('alpine:init', () => {
 
                             let result = '';
                             await window.Generation.streamGeneration(messages, (token) => {
-                                if (result === '' && this.summaryText === 'Generating summary...') {
+                                if (result === '' && this.summaryText === this.t('status.generatingSummary')) {
                                     this.summaryText = '';
                                 }
                                 result += token;
@@ -727,8 +815,8 @@ document.addEventListener('alpine:init', () => {
                     this.summaryTargetSceneId = null;
                     this.summaryText = '';
                     this.sceneTags = '';
-                    this.saveStatus = 'Summary saved';
-                    setTimeout(() => { this.saveStatus = 'Saved'; }, 1200);
+                    this.saveStatus = this.t('status.summarySaved');
+                    setTimeout(() => { this.saveStatus = this.t('status.saved'); }, 1200);
                 } catch (e) {
                     console.error('saveSceneSummary error', e);
                 }
@@ -742,7 +830,7 @@ document.addEventListener('alpine:init', () => {
 
                     const chapter = (this.chapters || []).find(c => c.id === id);
                     if (!chapter || !chapter.scenes || chapter.scenes.length === 0) {
-                        this.summaryText = 'No scenes in this chapter to summarize.';
+                        this.summaryText = this.t('summary.noScenes');
                         return;
                     }
 
@@ -759,14 +847,14 @@ document.addEventListener('alpine:init', () => {
                         .join('\n\n');
 
                     if (!sceneSummaries) {
-                        this.summaryText = 'No scene summaries available. Please summarize individual scenes first.';
+                        this.summaryText = this.t('summary.noSceneSummaries');
                         return;
                     }
 
                     // If we have a summary prompt and AI is ready, use AI
                     if (usePrompt && window.Generation && this.aiStatus === 'ready') {
                         try {
-                            this.summaryText = 'Generating chapter summary...';
+                            this.summaryText = this.t('status.generatingChapterSummary');
                             const promptText = usePrompt.content || '';
 
                             // Build proper messages array with system instruction and user content
@@ -781,7 +869,7 @@ document.addEventListener('alpine:init', () => {
 
                             let result = '';
                             await window.Generation.streamGeneration(messages, (token) => {
-                                if (result === '' && this.summaryText === 'Generating chapter summary...') {
+                                if (result === '' && this.summaryText === this.t('status.generatingChapterSummary')) {
                                     this.summaryText = '';
                                 }
                                 result += token;
@@ -1025,21 +1113,21 @@ document.addEventListener('alpine:init', () => {
             // Rename a project from carousel
             async renameProject(project) {
                 if (!project) return;
-                const newName = prompt('Enter new project name:', project.name);
+                const newName = prompt(this.t('alerts.renameProjectPrompt'), project.name);
                 if (!newName || newName === project.name) return;
                 try {
                     await db.projects.update(project.id, { name: newName, modified: new Date() });
                     await this.loadProjects();
                 } catch (e) {
                     console.error('Failed to rename project:', e);
-                    alert('Failed to rename project.');
+                    alert(this.t('alerts.failedRenameProject'));
                 }
             },
 
             // Update project cover image
             async updateProjectCover(projectId, file) {
                 if (!file || !file.type.startsWith('image/')) {
-                    alert('Please select an image file.');
+                    alert(this.t('alerts.selectImage'));
                     return;
                 }
 
@@ -1075,7 +1163,7 @@ document.addEventListener('alpine:init', () => {
                         img.src = e.target.result;
                     } catch (err) {
                         console.error('Failed to process cover image:', err);
-                        alert('Failed to process image.');
+                        alert(this.t('alerts.failedProcessImage'));
                     }
                 };
                 reader.readAsDataURL(file);
@@ -1095,7 +1183,7 @@ document.addEventListener('alpine:init', () => {
             // Import project from Writingway 1
             async importFromW1(event) {
                 if (!window.W1Importer) {
-                    alert('W1 Importer module not loaded');
+                    alert(this.t('alerts.w1ImporterMissing'));
                     return;
                 }
                 await window.W1Importer.importProject(this, event.target.files);
@@ -1156,7 +1244,7 @@ document.addEventListener('alpine:init', () => {
                     }
                 } catch (e) {
                     console.error('Export error:', e);
-                    alert('Export failed: ' + (e.message || e));
+                    alert(this.t('alerts.exportFailed', { error: e.message || e }));
                 }
             },
 
@@ -1534,7 +1622,7 @@ document.addEventListener('alpine:init', () => {
                     this.renameChapterName = '';
                 } catch (e) {
                     console.error('Failed to rename chapter:', e);
-                    alert('Failed to rename chapter');
+                    alert(this.t('alerts.failedRenameChapter'));
                 }
             },
 
@@ -1560,14 +1648,14 @@ document.addEventListener('alpine:init', () => {
                     this.renameSceneName = '';
                 } catch (e) {
                     console.error('Failed to rename scene:', e);
-                    alert('Failed to rename scene');
+                    alert(this.t('alerts.failedRenameScene'));
                 }
             },
 
             // Editor
             onEditorChange(e) {
                 // Content automatically updated via x-model
-                this.saveStatus = 'Unsaved';
+                this.saveStatus = this.t('status.unsaved');
                 clearTimeout(this.saveTimeout);
                 this.saveTimeout = setTimeout(() => {
                     this.saveScene({ autosave: true });
@@ -1717,7 +1805,7 @@ document.addEventListener('alpine:init', () => {
                 });
 
                 // Trigger save
-                this.saveStatus = 'Unsaved';
+                this.saveStatus = this.t('status.unsaved');
                 clearTimeout(this.saveTimeout);
                 this.saveTimeout = setTimeout(() => {
                     this.saveScene({ autosave: true });
@@ -1761,7 +1849,7 @@ document.addEventListener('alpine:init', () => {
             // This honors POV, tense, selected prose prompt, and includes scene context.
             async previewPrompt() {
                 if (!this.beatInput) {
-                    alert('No beat provided to preview.');
+                    alert(this.t('alerts.noBeatPreview'));
                     return;
                 }
 
@@ -1802,7 +1890,7 @@ document.addEventListener('alpine:init', () => {
                         try { console.debug('[preview] builtPrompt preview:', String(prompt).slice(0, 600).replace(/\n/g, '\\n')); } catch (e) { }
                     } else {
                         // Fallback textual representation if generation module isn't loaded
-                        prompt = `=== PREVIEW PROMPT ===\nBEAT:\n${this.beatInput}\n\nPOV CHARACTER: ${this.povCharacter || ''}\nPOV: ${this.pov}\nTENSE: ${this.tense}\n\n---\n(Scene content below)\n${this.currentScene?.content || ''}\n\n---\n(System prompt)\n${systemPromptText || '(default)'}\n\n---\n(User prompt)\n${prosePromptText || '(none)'}\n`;
+                        prompt = `${this.t('beat.previewPromptHeader')}\n${this.t('beat.previewBeat')}\n${this.beatInput}\n\n${this.t('beat.previewPovCharacter')} ${this.povCharacter || ''}\n${this.t('beat.previewPov')} ${this.pov}\n${this.t('beat.previewTense')} ${this.tense}\n\n---\n${this.t('beat.previewSceneContent')}\n${this.currentScene?.content || ''}\n\n---\n${this.t('beat.previewSystemPrompt')}\n${systemPromptText || this.t('beat.previewDefault')}\n\n---\n${this.t('beat.previewUserPrompt')}\n${prosePromptText || this.t('beat.previewNone')}\n`;
                     }
 
                     // Create a simple overlay showing the prompt in a read-only textarea so the user can inspect/copy it.
@@ -1834,9 +1922,9 @@ document.addEventListener('alpine:init', () => {
                     header.style.fontSize = '13px';
                     header.style.color = 'var(--text-secondary)';
                     header.style.marginBottom = '8px';
-                    const resolvedId = (proseInfo && proseInfo.id) ? proseInfo.id : '(none)';
+                    const resolvedId = (proseInfo && proseInfo.id) ? proseInfo.id : this.t('beat.previewNone');
                     const resolvedSource = (proseInfo && proseInfo.source) ? proseInfo.source : 'none';
-                    header.textContent = `Resolved prose prompt: ${resolvedId} (${resolvedSource})`;
+                    header.textContent = this.t('beat.resolvedProsePrompt', { id: resolvedId, source: resolvedSource });
 
                     const ta = document.createElement('textarea');
                     ta.readOnly = true;
@@ -1853,12 +1941,12 @@ document.addEventListener('alpine:init', () => {
                     controls.style.marginTop = '8px';
 
                     const close = document.createElement('button');
-                    close.textContent = 'Close';
+                    close.textContent = this.t('common.close');
                     close.className = 'btn btn-primary';
                     close.onclick = () => { overlay.remove(); };
 
                     const copy = document.createElement('button');
-                    copy.textContent = 'Copy';
+                    copy.textContent = this.t('common.copy');
                     copy.className = 'btn btn-secondary';
                     copy.style.marginRight = '8px';
                     copy.onclick = () => {
@@ -1866,8 +1954,8 @@ document.addEventListener('alpine:init', () => {
                             ta.select();
                             document.execCommand('copy');
                         } catch (e) { /* ignore */ }
-                        copy.textContent = 'Copied';
-                        setTimeout(() => { copy.textContent = 'Copy'; }, 1200);
+                        copy.textContent = this.t('common.copied');
+                        setTimeout(() => { copy.textContent = this.t('common.copy'); }, 1200);
                     };
 
                     controls.appendChild(copy);
@@ -1881,7 +1969,7 @@ document.addEventListener('alpine:init', () => {
 
                 } catch (e) {
                     console.error('previewPrompt error', e);
-                    alert('Failed to build preview prompt: ' + (e && e.message ? e.message : e));
+                    alert(this.t('alerts.previewPromptFailed', { error: e && e.message ? e.message : e }));
                 }
             },
 
@@ -1924,7 +2012,7 @@ document.addEventListener('alpine:init', () => {
                 if (!this.currentScene) return;
 
                 this.isSaving = true;
-                this.saveStatus = 'Saving...';
+                this.saveStatus = this.t('status.saving');
 
 
                 const wordCount = this.countWords(this.currentScene.content);
@@ -2002,7 +2090,7 @@ document.addEventListener('alpine:init', () => {
                 }
 
                 this.isSaving = false;
-                this.saveStatus = 'Saved';
+                this.saveStatus = this.t('status.saved');
 
                 // Periodically check if export reminder should be shown (every 10 saves)
                 if (!this._saveCount) this._saveCount = 0;
@@ -2148,12 +2236,12 @@ document.addEventListener('alpine:init', () => {
             async saveBackupSettings() {
                 // Validate token first
                 if (this.githubToken) {
-                    this.backupStatus = 'Validating token...';
+                    this.backupStatus = this.t('status.validatingToken');
                     const result = await window.GitHubBackup.validateToken(this.githubToken);
 
                     if (!result.valid) {
-                        alert('Invalid GitHub token: ' + result.error);
-                        this.backupStatus = 'Token invalid';
+                        alert(this.t('alerts.invalidGithubToken', { error: result.error }));
+                        this.backupStatus = this.t('status.tokenInvalid');
                         return;
                     }
 
@@ -2166,10 +2254,10 @@ document.addEventListener('alpine:init', () => {
                 // Start or stop auto-backup based on enabled state
                 if (this.backupEnabled && this.githubToken) {
                     window.GitHubBackup.startAutoBackup(this);
-                    this.backupStatus = 'Auto-backup enabled';
+                    this.backupStatus = this.t('status.autoBackupEnabled');
                 } else {
                     window.GitHubBackup.stopAutoBackup();
-                    this.backupStatus = 'Auto-backup disabled';
+                    this.backupStatus = this.t('status.autoBackupDisabled');
                 }
 
                 this.showBackupSettings = false;
@@ -2177,34 +2265,34 @@ document.addEventListener('alpine:init', () => {
 
             async backupNow() {
                 if (!this.githubToken || !this.currentProject) {
-                    alert('Please configure GitHub token and select a project first.');
+                    alert(this.t('alerts.configureGithubFirst'));
                     return;
                 }
 
-                this.backupStatus = 'Backing up...';
+                this.backupStatus = this.t('status.backingUp');
                 const result = await window.GitHubBackup.backupToGist(this);
 
                 if (result.success) {
                     this.lastBackupTime = new Date();
-                    this.backupStatus = 'Backed up';
+                    this.backupStatus = this.t('status.backedUp');
                     if (result.gistId) {
                         this.currentProjectGistId = result.gistId;
                         window.GitHubBackup.saveBackupSettings(this);
                     }
-                    alert('Backup successful!');
+                    alert(this.t('alerts.backupSuccess'));
                 } else {
-                    this.backupStatus = 'Backup failed';
-                    alert('Backup failed: ' + result.error);
+                    this.backupStatus = this.t('status.backupFailed');
+                    alert(this.t('alerts.backupFailed', { error: result.error }));
                 }
             },
 
             async openRestoreModal() {
                 if (!this.githubToken || !this.currentProjectGistId) {
-                    alert('No backup configured for this project.');
+                    alert(this.t('alerts.noBackupConfigured'));
                     return;
                 }
 
-                this.backupStatus = 'Loading backups...';
+                this.backupStatus = this.t('status.loadingBackups');
                 const result = await window.GitHubBackup.listBackups(this);
 
                 if (result.success) {
@@ -2212,8 +2300,8 @@ document.addEventListener('alpine:init', () => {
                     this.showRestoreModal = true;
                     this.backupStatus = '';
                 } else {
-                    alert('Failed to load backups: ' + result.error);
-                    this.backupStatus = 'Failed to load';
+                    alert(this.t('alerts.loadBackupsFailed', { error: result.error }));
+                    this.backupStatus = this.t('status.failedToLoad');
                 }
             },
 
@@ -2223,21 +2311,21 @@ document.addEventListener('alpine:init', () => {
             },
 
             async restoreBackup(versionUrl) {
-                if (!confirm('This will replace your current project with the backup. Continue?')) {
+                if (!confirm(this.t('alerts.restoreConfirm'))) {
                     return;
                 }
 
-                this.backupStatus = 'Restoring...';
+                this.backupStatus = this.t('status.restoring');
                 const result = await window.GitHubBackup.restoreFromBackup(this, versionUrl);
 
                 if (result.success) {
-                    this.backupStatus = 'Restored';
-                    alert('Backup restored successfully!');
+                    this.backupStatus = this.t('status.restored');
+                    alert(this.t('alerts.restoreSuccess'));
                     this.showRestoreModal = false;
                     this.backupList = [];
                 } else {
-                    this.backupStatus = 'Restore failed';
-                    alert('Restore failed: ' + result.error);
+                    this.backupStatus = this.t('status.restoreFailed');
+                    alert(this.t('alerts.restoreFailed', { error: result.error }));
                 }
             }
         }; // End of app state + methods

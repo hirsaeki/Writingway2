@@ -1,5 +1,7 @@
 // Save utilities for scenes. Exposes window.Save.saveScene(app)
 (function () {
+    const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+
     async function saveScene(app, opts) {
         if (!app) return false;
         opts = opts || {};
@@ -7,17 +9,17 @@
         // Prevent saving from read-only tabs (non-primary tabs)
         if (window.TabSync && !window.TabSync.isPrimaryTab()) {
             console.warn('🚫 Cannot save from read-only tab');
-            app.saveStatus = 'Read-only tab';
+            app.saveStatus = tr(app, 'status.readOnlyTab');
             return false;
         }
 
         try {
             app.isSaving = true;
-            app.saveStatus = 'Saving...';
+            app.saveStatus = tr(app, 'status.saving');
 
             const scene = app.currentScene;
             if (!scene) {
-                app.saveStatus = 'No scene';
+                app.saveStatus = tr(app, 'status.noScene');
                 app.isSaving = false;
                 return false;
             }
@@ -27,12 +29,11 @@
                 const dbScene = await db.scenes.get(scene.id);
                 if (dbScene && dbScene.updatedAt && dbScene.updatedAt > scene.loadedUpdatedAt) {
                     const shouldOverwrite = confirm(
-                        `Warning: This scene was modified in another tab since you loaded it.\n\n` +
-                        `Click OK to overwrite with your changes, or Cancel to reload the latest version.`
+                        tr(app, 'alerts.conflictScene')
                     );
                     if (!shouldOverwrite) {
                         app.isSaving = false;
-                        app.saveStatus = 'Cancelled';
+                        app.saveStatus = tr(app, 'status.cancelled');
                         // Reload the scene with latest version
                         await app.loadScene?.(scene.id);
                         return false;
@@ -45,12 +46,11 @@
                 const dbContent = await db.content.get(scene.id);
                 if (dbContent && dbContent.updatedAt && dbContent.updatedAt > scene.contentLoadedUpdatedAt) {
                     const shouldOverwrite = confirm(
-                        `Warning: This scene's content was modified in another tab since you loaded it.\n\n` +
-                        `Click OK to overwrite with your changes, or Cancel to reload the latest version.`
+                        tr(app, 'alerts.conflictContent')
                     );
                     if (!shouldOverwrite) {
                         app.isSaving = false;
-                        app.saveStatus = 'Cancelled';
+                        app.saveStatus = tr(app, 'status.cancelled');
                         await app.loadScene?.(scene.id);
                         return false;
                     }
@@ -188,11 +188,11 @@
                 app.currentScene.contentLoadedUpdatedAt = now;
             }
 
-            app.saveStatus = 'Saved';
+            app.saveStatus = tr(app, 'status.saved');
             return true;
         } catch (err) {
             console.error('saveScene error', err);
-            app.saveStatus = 'Error';
+            app.saveStatus = tr(app, 'status.error');
             return false;
         } finally {
             app.isSaving = false;

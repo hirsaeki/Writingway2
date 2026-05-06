@@ -309,13 +309,14 @@ Requires **Node 18+**.
 
 Install:
 ```
-npm install
+pnpm install
 ```
 
 Run development server:
 ```
-npm run dev
+pnpm run dev
 ```
+Then open: **http://localhost:8787/main.html**
 
 Project structure:
 ```

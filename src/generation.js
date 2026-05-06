@@ -3,6 +3,8 @@
 // - buildPrompt(beat, sceneContext, options) => string
 // - streamGeneration(prompt, onToken(token)) => Promise<void>
 (function () {
+    const tr = (key, params, fallback) => window.t ? window.t(key, params, fallback) : (fallback || key);
+
     function buildPrompt(beat, sceneContext, options = {}) {
         try {
             console.debug('[buildPrompt] received prosePrompt:', JSON.stringify(options.prosePrompt));
@@ -91,18 +93,9 @@
 
         userContent += `\n\nBEAT TO EXPAND:\n${cleanedBeat}\n\nWrite the next 2-3 paragraphs:`;
 
-        // Return object with both messages array (for APIs) and string format (for local)
-        const result = {
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userContent }
-            ],
-            // Legacy string format for local models with chat template
-            asString: function () {
-                return `<|im_start|>system\n${systemPrompt}<|im_end|>\n<|im_start|>user\n${userContent}<|im_end|>\n<|im_start|>assistant\n`;
-            }
-        };
-        return result;
+        // Keep buildPrompt's public contract as a string. Several UI previews and
+        // tests call string methods directly on this return value.
+        return `<|im_start|>system\n${systemPrompt}<|im_end|>\n<|im_start|>user\n${userContent}<|im_end|>\n<|im_start|>assistant\n`;
     }
 
     async function streamGeneration(prompt, onToken, app) {
@@ -184,7 +177,7 @@
         });
 
         if (!response.ok) {
-            throw new Error(`Server returned ${response.status}`);
+            throw new Error(tr('alerts.serverReturned', { status: response.status }));
         }
 
         const reader = response.body.getReader();
@@ -410,7 +403,7 @@
         if (!response.ok) {
             const errorText = await response.text();
             console.error('❌ API Error:', response.status, errorText);
-            throw new Error(`API returned ${response.status}: ${errorText}`);
+            throw new Error(tr('alerts.apiReturned', { status: response.status, error: errorText }));
         }
 
         // Check if response is actually streaming or if it's a complete response
@@ -437,7 +430,7 @@
                     console.warn('   - Max tokens was hit during reasoning phase');
                     console.warn('   - Model never produced final answer');
                     console.warn('   - Try increasing max_tokens significantly (10000+) for thinking models');
-                    throw new Error('Thinking model returned empty response. The model likely hit max_tokens during its reasoning phase before generating an answer. Try increasing Max Length to 10000+ tokens in AI Settings.');
+                    throw new Error(tr('alerts.thinkingModelEmpty'));
                 }
             } else if (provider === 'anthropic') {
                 content = data.content?.[0]?.text;
@@ -459,7 +452,7 @@
                 }
             } else {
                 console.error('❌ No content found in non-streaming response');
-                throw new Error('No content received from API');
+                throw new Error(tr('alerts.noApiContent'));
             }
             return { finishReason };
         }
@@ -557,7 +550,7 @@
             console.error('1. Do not support streaming at all');
             console.error('2. Return content in a different field structure');
             console.error('3. Require stream=false in the API request');
-            throw new Error('No content received from API. This model may not support streaming or may require different parameters.');
+            throw new Error(tr('alerts.noStreamingContent'));
         }
 
         console.log('🏁 Final finish reason:', finishReason);
@@ -618,7 +611,10 @@
             beatSceneSummaries.forEach(s => sceneMap.set(s.title, s));
             const sceneSummaries = Array.from(sceneMap.values());
             const genOpts = { povCharacter: app.povCharacter, pov: app.pov, tense: app.tense, prosePrompt: prosePromptText, systemPrompt: systemPromptText, compendiumEntries: compEntries, sceneSummaries: sceneSummaries };
-            let prompt = buildPrompt(app.beatInput, app.currentScene?.content || '', genOpts);
+            const generationApi = window.Generation || {};
+            const buildPromptFn = typeof generationApi.buildPrompt === 'function' ? generationApi.buildPrompt : buildPrompt;
+            const streamGenerationFn = typeof generationApi.streamGeneration === 'function' ? generationApi.streamGeneration : streamGeneration;
+            let prompt = buildPromptFn(app.beatInput, app.currentScene?.content || '', genOpts);
             // Save prompt to history
             try {
                 await db.promptHistory.add({
@@ -638,7 +634,7 @@
             app.lastGenText = '';
             app.showGenActions = false;
             // Stream tokens and append into the current scene
-            await streamGeneration(prompt, (token) => {
+            await streamGenerationFn(prompt, (token) => {
                 app.currentScene.content += token;
                 app.lastGenText += token;
             }, app);
@@ -672,7 +668,7 @@
             await app.saveScene();
         } catch (error) {
             console.error('Generation error:', error);
-            alert('Failed to generate text. Make sure llama-server is running.\n\nError: ' + (error && error.message ? error.message : error));
+            alert(tr('alerts.generationFailed', { error: error && error.message ? error.message : error }));
         } finally {
             app.isGenerating = false;
         }

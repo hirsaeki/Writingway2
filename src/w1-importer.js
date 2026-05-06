@@ -1,6 +1,8 @@
 // Writingway 1 Importer Module
 // Imports projects from Writingway 1 file structure into Writingway 2 IndexedDB
 (function () {
+    const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+
     const W1Importer = {
         /**
          * Import a Writingway 1 project from a folder
@@ -9,7 +11,7 @@
          */
         async importProject(app, files) {
             if (!files || files.length === 0) {
-                alert('No files selected. Please select a Writingway 1 project folder.');
+                alert(tr(app, 'alerts.w1NoFiles'));
                 return;
             }
 
@@ -26,7 +28,7 @@
                 // Find structure.json file
                 const structureFile = Object.keys(fileMap).find(p => p.endsWith('_structure.json'));
                 if (!structureFile) {
-                    throw new Error('Could not find project structure file (*_structure.json)');
+                    throw new Error(tr(app, 'alerts.w1StructureMissing'));
                 }
 
                 // Extract project name from structure file name
@@ -109,14 +111,14 @@
                 app.showW1ImportModal = false;
                 app.w1ImportInProgress = false;
 
-                alert(`✓ Successfully imported "${projectName}"!\n\n${chapterOrder} chapters and ${totalScenes} scenes imported.\n\nCheck console for details if scenes have no content.`);
+                alert(tr(app, 'alerts.w1ImportSuccess', { name: projectName, chapters: chapterOrder, scenes: totalScenes }));
 
                 // Open the imported project
                 await app.openProject(projectId);
 
             } catch (e) {
                 console.error('Failed to import Writingway 1 project:', e);
-                alert(`Failed to import project:\n\n${e.message}\n\nSee console for details.`);
+                alert(tr(app, 'alerts.w1ImportFailed', { error: e.message }));
                 app.w1ImportInProgress = false;
             }
         },

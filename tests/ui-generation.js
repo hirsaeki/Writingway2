@@ -63,10 +63,14 @@ const path = require('path');
 
         // Fill beat input and trigger generation
         await page.fill('.beat-input', "She opens the door and steps into the rain.");
+        await page.evaluate(() => {
+            const app = window.__test && window.__test.getApp ? window.__test.getApp() : null;
+            if (app) app.aiStatus = 'ready';
+        });
         await page.click('.generate-btn');
 
         // Wait for Accept button to appear which indicates generation completed
-        await page.waitForSelector('text=Accept', { timeout: 5000 });
+        await page.waitForSelector('.accept-generation-btn', { timeout: 5000 });
 
         // Verify that generated tokens appear in the editor textarea
         const ta = await page.$('.editor-textarea');
@@ -78,11 +82,11 @@ const path = require('path');
         }
 
         // Click Accept and verify actions disappear (wait until hidden)
-        await page.click('text=Accept');
+        await page.click('.accept-generation-btn');
         try {
-            await page.waitForSelector('text=Accept', { state: 'hidden', timeout: 3000 });
+            await page.waitForSelector('.accept-generation-btn', { state: 'hidden', timeout: 3000 });
         } catch (e) {
-            const isVis = await page.isVisible('text=Accept').catch(() => false);
+            const isVis = await page.isVisible('.accept-generation-btn').catch(() => false);
             if (isVis) {
                 console.error('Accept button still visible after accepting');
                 await browser.close();

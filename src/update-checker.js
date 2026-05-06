@@ -2,6 +2,8 @@
 // Checks for new versions on GitHub based on latest commit date
 // Integrates with local updater service for one-click updates
 (function () {
+    const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+
     const UpdateChecker = {
         // Build timestamp - update this when you push a new version
         // This represents when this version was created
@@ -38,12 +40,12 @@
                     const commitShort = commit.sha.substring(0, 7);
                     return {
                         version: commitShort,
-                        commitDate: new Date(commitDate).toLocaleDateString(),
+                        commitDate: new Date(commitDate).toLocaleDateString(window.I18n ? window.I18n.locale() : undefined),
                         message: commit.commit.message.split('\n')[0], // First line only
                         url: commit.html_url,
                         downloadUrl: `https://github.com/${this.repoOwner}/${this.repoName}/archive/refs/heads/${this.branch}.zip`,
                         notes: `Latest commit: ${commit.commit.message}`,
-                        publishedAt: new Date(commitDate).toLocaleDateString()
+                        publishedAt: new Date(commitDate).toLocaleDateString(window.I18n ? window.I18n.locale() : undefined)
                     };
                 }
 
@@ -104,15 +106,15 @@
                 const data = await response.json();
 
                 if (response.ok && data.ok) {
-                    return { success: true, message: data.message || 'Downloaded. Restart to apply.' };
+                    return { success: true, message: data.message || tr(null, 'alerts.updateDownloadedRestart') };
                 } else {
-                    return { success: false, message: data.error || 'Download failed' };
+                    return { success: false, message: data.error || tr(null, 'update.downloadFailed') };
                 }
             } catch (error) {
                 if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                    return { success: false, message: 'Updater service not running. Please restart Writingway.' };
+                    return { success: false, message: tr(null, 'alerts.updaterRestartRequired') };
                 }
-                return { success: false, message: `Error: ${error.message}` };
+                return { success: false, message: tr(null, 'workshop.errorPrefix', { error: error.message }) };
             }
         },
 
@@ -190,11 +192,11 @@
                 if (updateInfo) {
                     await this.showUpdateDialog(app, updateInfo);
                 } else if (!silent) {
-                    alert('✓ You are running the latest version of Writingway!');
+                    alert(tr(app, 'alerts.latestVersion'));
                 }
             } catch (error) {
                 if (!silent) {
-                    alert('Could not check for updates. Please check your internet connection.');
+                    alert(tr(app, 'alerts.updateCheckFailed'));
                 }
             } finally {
                 app.checkingForUpdates = false;

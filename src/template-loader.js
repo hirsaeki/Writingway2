@@ -3,6 +3,8 @@
  * Loads HTML templates from src/templates directory
  */
 (function () {
+    const tr = (key, params, fallback) => window.t ? window.t(key, params, fallback) : (fallback || key);
+
     const TemplateLoader = {
         cache: {},
 
@@ -17,6 +19,21 @@
                 return this.cache[templateName];
             }
 
+            try {
+                if (window.location.protocol !== 'file:') {
+                    const response = await fetch(`src/templates/${templateName}.html`);
+                    if (!response.ok) {
+                        throw new Error(tr('alerts.templateLoadFailed', { name: templateName }));
+                    }
+
+                    const html = await response.text();
+                    this.cache[templateName] = html;
+                    return html;
+                }
+            } catch (error) {
+                console.error(`Template loading error for ${templateName}:`, error);
+            }
+
             // Look for an inline <template id="tpl-<name>"> element so the page
             // works when opened directly via file:// (where fetch() is blocked).
             const inline = document.getElementById(`tpl-${templateName}`);
@@ -28,19 +45,7 @@
                 return html;
             }
 
-            try {
-                const response = await fetch(`src/templates/${templateName}.html`);
-                if (!response.ok) {
-                    throw new Error(`Failed to load template: ${templateName}`);
-                }
-
-                const html = await response.text();
-                this.cache[templateName] = html;
-                return html;
-            } catch (error) {
-                console.error(`Template loading error for ${templateName}:`, error);
-                return '';
-            }
+            return '';
         },
 
         /**

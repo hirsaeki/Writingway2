@@ -1,5 +1,7 @@
 // Prompts module — exposes window.Prompts with functions that operate on the shared `db` instance
 (function () {
+    const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+
     async function loadPrompts(app) {
         if (!app.currentProject) {
             app.prompts = [];
@@ -19,7 +21,7 @@
 
     async function createPrompt(app, category) {
         if (!app.currentProject) return;
-        const title = app.newPromptTitle && app.newPromptTitle.trim() ? app.newPromptTitle.trim() : 'New Prompt';
+        const title = app.newPromptTitle && app.newPromptTitle.trim() ? app.newPromptTitle.trim() : tr(app, 'prompts.newPrompt', {}, 'New Prompt');
         const id = Date.now().toString();
         const now = new Date();
         const prompt = { id, projectId: app.currentProject.id, category, title, content: '', systemContent: '', created: now, modified: now };
@@ -69,7 +71,7 @@
 
     async function deletePrompt(app, id) {
         if (!id) return;
-        if (!confirm('Delete this prompt?')) return;
+        if (!confirm(tr(app, 'alerts.deletePrompt'))) return;
         try {
             await db.prompts.delete(id);
             if (app.currentPrompt && app.currentPrompt.id === id) app.currentPrompt = null;
@@ -92,7 +94,7 @@
             let title = newTitle;
             if (!title) {
                 const p = await db.prompts.get(id);
-                title = prompt('Rename prompt:', p && p.title ? p.title : '');
+                title = prompt(tr(app, 'alerts.renamePromptPrompt'), p && p.title ? p.title : '');
             }
             if (title === null || title === undefined) return; // user cancelled
             title = String(title).trim();
@@ -149,13 +151,13 @@
     // Export all prompts for the current project as JSON
     async function exportPrompts(app) {
         if (!app.currentProject) {
-            alert('No project selected.');
+            alert(tr(app, 'alerts.noProjectSelected'));
             return;
         }
         try {
             const prompts = await db.prompts.where('projectId').equals(app.currentProject.id).toArray();
             if (!prompts || prompts.length === 0) {
-                alert('No prompts to export.');
+                alert(tr(app, 'alerts.noPromptsToExport'));
                 return;
             }
             
@@ -187,14 +189,14 @@
             URL.revokeObjectURL(url);
         } catch (e) {
             console.error('Failed to export prompts:', e);
-            alert('Failed to export prompts: ' + e.message);
+            alert(tr(app, 'alerts.promptExportFailed', { error: e.message }));
         }
     }
 
     // Import prompts from a JSON file
     async function importPrompts(app, fileInput) {
         if (!app.currentProject) {
-            alert('No project selected.');
+            alert(tr(app, 'alerts.noProjectSelected'));
             return;
         }
         
@@ -209,12 +211,12 @@
             
             // Validate format
             if (!data.type || data.type !== 'prompts' || !Array.isArray(data.prompts)) {
-                alert('Invalid prompts file format.');
+                alert(tr(app, 'alerts.invalidPromptsFile'));
                 return;
             }
             
             const count = data.prompts.length;
-            if (!confirm(`Import ${count} prompt(s) into the current project?`)) {
+            if (!confirm(tr(app, 'alerts.importPromptsConfirm', { count }))) {
                 return;
             }
             
@@ -226,7 +228,7 @@
                     id,
                     projectId: app.currentProject.id,
                     category: p.category || 'prose',
-                    title: p.title || 'Imported Prompt',
+                    title: p.title || tr(app, 'prompts.importedPrompt', {}, 'Imported Prompt'),
                     content: p.content || '',
                     systemContent: p.systemContent || '',
                     created: now,
@@ -237,10 +239,10 @@
             }
             
             await loadPrompts(app);
-            alert(`Successfully imported ${count} prompt(s).`);
+            alert(tr(app, 'alerts.importPromptsSuccess', { count }));
         } catch (e) {
             console.error('Failed to import prompts:', e);
-            alert('Failed to import prompts: ' + e.message);
+            alert(tr(app, 'alerts.importPromptsFailed', { error: e.message }));
         } finally {
             // Reset file input
             fileInput.value = '';

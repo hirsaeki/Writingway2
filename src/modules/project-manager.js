@@ -1,6 +1,8 @@
 // Project Manager Module
 // Handles all project-level CRUD operations, selection, and export
 (function () {
+    const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+
     const ProjectManager = {
         /**
          * Create a new project with a default chapter and scene
@@ -282,7 +284,7 @@
             const project = await db.projects.get(projectId);
             if (!project) return;
 
-            const confirmed = confirm(`Are you sure you want to delete "${project.name}"?\n\nThis will permanently delete:\n• All chapters and scenes\n• All compendium entries\n• All prompts\n• Workshop sessions\n\nThis cannot be undone!`);
+            const confirmed = confirm(tr(app, 'alerts.deleteProjectConfirm', { name: project.name }));
             if (!confirmed) return;
 
             try {
@@ -325,10 +327,10 @@
                     localStorage.removeItem('writingway:lastProject');
                 }
 
-                alert(`Project "${project.name}" has been deleted.`);
+                alert(tr(app, 'alerts.projectDeleted', { name: project.name }));
             } catch (e) {
                 console.error('Failed to delete project:', e);
-                alert('Failed to delete project. See console for details.');
+                alert(tr(app, 'alerts.deleteProjectFailed'));
             }
         },
 
@@ -360,7 +362,7 @@
             if (!app.currentProject) return;
             try {
                 if (typeof JSZip === 'undefined') {
-                    alert('ZIP export library is not loaded.');
+                    alert(tr(app, 'alerts.zipExportMissing'));
                     return;
                 }
 
@@ -422,7 +424,7 @@
                 URL.revokeObjectURL(url);
             } catch (e) {
                 console.error('Export failed:', e);
-                alert('Export failed: ' + (e && e.message ? e.message : e));
+                alert(tr(app, 'alerts.exportFailed', { error: e && e.message ? e.message : e }));
             }
         },
 
@@ -486,7 +488,7 @@
                 URL.revokeObjectURL(url);
             } catch (e) {
                 console.error('Export failed:', e);
-                alert('Export failed: ' + (e && e.message ? e.message : e));
+                alert(tr(app, 'alerts.exportFailed', { error: e && e.message ? e.message : e }));
             }
         },
 
@@ -614,7 +616,7 @@
                 URL.revokeObjectURL(url);
             } catch (e) {
                 console.error('Export failed:', e);
-                alert('Export failed: ' + (e && e.message ? e.message : e));
+                alert(tr(app, 'alerts.exportFailed', { error: e && e.message ? e.message : e }));
             }
         },
 
@@ -626,7 +628,7 @@
             if (!app.currentProject) return;
             try {
                 if (typeof JSZip === 'undefined') {
-                    alert('ZIP library required for EPUB export is not loaded.');
+                    alert(tr(app, 'alerts.epubZipMissing'));
                     return;
                 }
 
@@ -823,7 +825,7 @@ p:first-of-type {
                 URL.revokeObjectURL(url);
             } catch (e) {
                 console.error('Export failed:', e);
-                alert('Export failed: ' + (e && e.message ? e.message : e));
+                alert(tr(app, 'alerts.exportFailed', { error: e && e.message ? e.message : e }));
             }
         },
 
@@ -865,7 +867,7 @@ p:first-of-type {
         async importProject(app, e) {
             try {
                 if (typeof JSZip === 'undefined') {
-                    alert('ZIP import library is not loaded.');
+                    alert(tr(app, 'alerts.zipImportMissing'));
                     return;
                 }
 
@@ -878,12 +880,12 @@ p:first-of-type {
                 }
 
                 if (!file) {
-                    alert('No file selected.');
+                    alert(tr(app, 'alerts.noFileSelected'));
                     return;
                 }
 
                 if (!file.name.endsWith('.zip')) {
-                    alert('Please select a .zip file exported from Writingway.');
+                    alert(tr(app, 'alerts.selectZip'));
                     return;
                 }
 
@@ -894,7 +896,7 @@ p:first-of-type {
                 // Read metadata
                 const metadataFile = zip.file('metadata.json');
                 if (!metadataFile) {
-                    alert('Invalid export file: missing metadata.json');
+                    alert(tr(app, 'alerts.invalidExportMissingMetadata'));
                     return;
                 }
 
@@ -902,7 +904,7 @@ p:first-of-type {
                 const metadata = JSON.parse(metadataText);
 
                 if (!metadata.project) {
-                    alert('Invalid export file: missing project data');
+                    alert(tr(app, 'alerts.invalidExportMissingProject'));
                     return;
                 }
 
@@ -997,11 +999,15 @@ p:first-of-type {
                 await this.loadProjects(app);
                 await this.selectProject(app, newProjectId);
 
-                alert(`✓ Project imported successfully!\n\n"${newProject.name}"\n\nChapters: ${metadata.chapters.length}\nScenes: ${metadata.chapters.reduce((sum, ch) => sum + ch.scenes.length, 0)}`);
+                alert(tr(app, 'alerts.importSuccess', {
+                    name: newProject.name,
+                    chapters: metadata.chapters.length,
+                    scenes: metadata.chapters.reduce((sum, ch) => sum + ch.scenes.length, 0)
+                }));
 
             } catch (e) {
                 console.error('Import failed:', e);
-                alert('Import failed: ' + (e && e.message ? e.message : e));
+                alert(tr(app, 'alerts.importFailed', { error: e && e.message ? e.message : e }));
             }
         }
     };

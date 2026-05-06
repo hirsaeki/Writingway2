@@ -144,7 +144,8 @@ Generation.generateFromBeat = async function (app) {
         await app.saveScene();
     } catch (error) {
         console.error('Generation error:', error);
-        alert('Failed to generate text. Make sure llama-server is running.\n\nError: ' + (error && error.message ? error.message : error));
+        const tr = (key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+        alert(tr('alerts.generationFailed', { error: error && error.message ? error.message : error }));
     } finally {
         app.isGenerating = false;
     }

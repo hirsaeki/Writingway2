@@ -165,7 +165,7 @@ const path = require('path');
 
         // Wait for new generation to finish (Accept appears again) — only applicable if Alpine is driving the DOM
         if (alpineReady) {
-            await page.waitForSelector('text=Accept', { timeout: 5000 });
+            await page.waitForSelector('.accept-generation-btn', { timeout: 5000 });
         }
         // Debug: fetch genCallCount and current content
         const debug = await page.evaluate(() => ({ genCount: window._genCallCount || 0, content: (document.querySelector('.editor-textarea') || {}).value || '' }));
@@ -220,17 +220,22 @@ const path = require('path');
 
         // Now test Discard: generate again then discard
         if (alpineReady) {
-            await page.click('text=Accept');
+            await page.click('.accept-generation-btn');
+            const beforeDiscardGeneration = await ta.evaluate(el => el.value);
             await page.fill('.beat-input', 'Beat two');
+            await page.evaluate(() => {
+                const app = window.__test && window.__test.getApp ? window.__test.getApp() : null;
+                if (app) app.aiStatus = 'ready';
+            });
             await page.click('.generate-btn');
-            await page.waitForSelector('text=Accept', { timeout: 5000 });
+            await page.waitForSelector('.accept-generation-btn', { timeout: 5000 });
 
             // Click Discard
-            await page.click('text=Discard');
+            await page.click('.discard-generation-btn');
             await page.waitForTimeout(200);
 
             const value3 = await ta.evaluate(el => el.value);
-            if (value3.includes('retry') || value3.includes('first')) {
+            if (value3 !== beforeDiscardGeneration) {
                 console.error('Discard did not remove generated text:', value3.slice(0, 200));
                 await browser.close();
                 process.exit(5);

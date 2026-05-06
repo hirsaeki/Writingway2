@@ -1,6 +1,8 @@
 // Scene Manager Module
 // Handles all scene-level CRUD operations, loading, ordering, and modal controls
 (function () {
+    const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+
     const SceneManager = {
         /**
          * Open the new scene modal
@@ -24,7 +26,7 @@
                 const chap = {
                     id: Date.now().toString() + '-c',
                     projectId: app.currentProject.id,
-                    title: 'Chapter 1',
+                    title: tr(app, 'modal.newChapter', {}, 'Chapter 1'),
                     order: 0,
                     created: new Date(),
                     modified: new Date()
@@ -201,7 +203,7 @@
          * @param {string} sceneId - ID of scene to delete
          */
         async deleteScene(app, sceneId) {
-            if (!confirm('Delete this scene? This cannot be undone.')) return;
+            if (!confirm(tr(app, 'alerts.deleteSceneConfirm'))) return;
             try {
                 const scene = await db.scenes.get(sceneId);
                 await db.scenes.delete(sceneId);

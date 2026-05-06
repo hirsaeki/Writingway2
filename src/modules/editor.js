@@ -4,6 +4,8 @@
  */
 
 (function () {
+    const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+
     const Editor = {
         /**
          * Count words in text (strips HTML tags)
@@ -191,7 +193,7 @@
             try {
                 if (!app.rewriteOriginalText) return;
                 if (!window.Generation || typeof window.Generation.streamGeneration !== 'function') {
-                    throw new Error('Generation not available');
+                    throw new Error(tr(app, 'alerts.generationUnavailable'));
                 }
                 app.rewriteOutput = '';
                 app.rewriteInProgress = true;
@@ -204,12 +206,12 @@
                 // Notify user if response was truncated
                 if (result?.finishReason === 'length' || result?.finishReason === 'MAX_TOKENS') {
                     console.warn('⚠️ Rewrite hit token limit');
-                    alert('⚠️ The generation reached the token limit and may be incomplete.\n\nTip: Increase "Max Length" in AI Settings (⚙️) for longer responses.');
+                    alert(tr(app, 'alerts.rewriteTokenLimit'));
                 }
             } catch (e) {
                 console.error('performRewrite error', e);
                 app.rewriteInProgress = false;
-                alert('Rewrite failed: ' + (e && e.message ? e.message : e));
+                alert(tr(app, 'alerts.rewriteFailed', { error: e && e.message ? e.message : e }));
             }
         },
 

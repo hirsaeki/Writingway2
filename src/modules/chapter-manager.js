@@ -1,6 +1,8 @@
 // Chapter Manager Module
 // Handles all chapter-level CRUD operations, ordering, and modal controls
 (function () {
+    const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+
     const ChapterManager = {
         /**
          * Open the new chapter modal
@@ -86,7 +88,7 @@
          * @param {string} chapterId - ID of chapter to delete
          */
         async deleteChapter(app, chapterId) {
-            if (!confirm('Delete this chapter? Scenes inside will be moved to another chapter or deleted. Continue?')) return;
+            if (!confirm(tr(app, 'alerts.deleteChapterConfirm'))) return;
             const idx = app.chapters.findIndex(c => c.id === chapterId);
             if (idx === -1) return;
 

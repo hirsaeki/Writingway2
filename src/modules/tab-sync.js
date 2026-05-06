@@ -4,6 +4,8 @@
     const CHANNEL_NAME = 'writingway-sync';
     let channel = null;
     let app = null;
+    const tr = (key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+    const READONLY_PREFIXES = ['🔒 READ-ONLY | ', '🔒 読み取り専用 | '];
 
     // Unique identifier for this tab instance
     const TAB_ID = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -202,10 +204,7 @@
                         } else {
                             // Scene was modified in another tab and user has no unsaved changes
                             console.warn('⚠️ Showing conflict dialog');
-                            const shouldReload = confirm(
-                                `This scene was modified in another tab.\n\n` +
-                                `Click OK to reload the latest version, or Cancel to keep your current changes.`
-                            );
+                            const shouldReload = confirm(tr('alerts.sceneModifiedOtherTab'));
                             if (shouldReload) {
                                 await app.loadScene?.(data.id);
                             } else {
@@ -223,7 +222,7 @@
                 }
                 break; case MSG_TYPES.PROJECT_DELETED:
                 if (app.currentProject?.id === data.id) {
-                    alert('This project was deleted in another tab.');
+                    alert(tr('alerts.projectDeletedOtherTab'));
                     app.currentProject = null;
                     await app.loadProjects?.();
                 } else {
@@ -239,7 +238,7 @@
 
             case MSG_TYPES.SCENE_DELETED:
                 if (app.currentScene?.id === data.id) {
-                    alert('This scene was deleted in another tab.');
+                    alert(tr('alerts.sceneDeletedOtherTab'));
                     app.currentScene = null;
                     await app.loadChapters?.();
                 } else if (app.currentProject?.id === data.projectId) {
@@ -338,14 +337,14 @@
                 editor.style.backgroundColor = 'var(--bg-secondary)';
                 editor.style.cursor = 'not-allowed';
                 editor.style.opacity = '0.7';
-                editor.title = 'Read-only: Open in the first tab to edit';
+                editor.title = tr('alerts.readOnlyTitle');
 
                 // Add a prominent banner to the editor header
                 addReadOnlyBanner();
 
                 // Show notification
                 if (app.currentScene) {
-                    alert('⚠️ Editor is READ-ONLY\n\nOnly the first tab can edit scenes to prevent conflicts.\n\nYou can still use other features like Settings, Workshop, etc.');
+                    alert(tr('alerts.readOnlyEditor'));
                 }
             } else {
                 editor.style.backgroundColor = '';
@@ -390,7 +389,7 @@
 
         banner.innerHTML = `
             <span style="font-size: 20px;">🔒</span>
-            <span>READ-ONLY MODE: This is not the primary tab. Close other tabs or use the first tab to edit.</span>
+            <span>${tr('alerts.readOnlyBanner')}</span>
         `;
 
         editorHeader.insertAdjacentElement('afterend', banner);
@@ -398,7 +397,7 @@
         // Update document title
         const originalTitle = document.title;
         if (!originalTitle.startsWith('🔒')) {
-            document.title = '🔒 READ-ONLY | ' + originalTitle;
+            document.title = tr('alerts.readOnlyPrefix') + originalTitle;
         }
     }
 
@@ -409,8 +408,11 @@
         }
 
         // Restore document title
-        if (document.title.startsWith('🔒 READ-ONLY | ')) {
-            document.title = document.title.replace('🔒 READ-ONLY | ', '');
+        for (const prefix of READONLY_PREFIXES) {
+            if (document.title.startsWith(prefix)) {
+                document.title = document.title.replace(prefix, '');
+                break;
+            }
         }
     }
 

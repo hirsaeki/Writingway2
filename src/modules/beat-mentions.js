@@ -1,6 +1,8 @@
 // Beat Mentions Module
 // Handles @compendium and #scene mention detection, search, selection, and resolution
 (function () {
+    const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+
     const BeatMentions = {
         /**
          * Handle beat input changes to detect @ and # mentions
@@ -138,7 +140,7 @@
                     .filter(s => (s.title || '').toLowerCase().includes(lower))
                     .map(s => ({
                         ...s,
-                        chapterName: chapterMap[s.chapterId] || 'Unknown Chapter',
+                        chapterName: chapterMap[s.chapterId] || tr(app, 'sidebar.unknownChapter'),
                         hasSummary: !!(s.summary && s.summary.length > 0),
                         summaryStale: s.summaryStale === true
                     }));
@@ -258,13 +260,13 @@
 
                 // Validate summary status
                 if (!hasSummary) {
-                    alert(`⚠️ Scene "${scene.title}" has no summary.\n\nPlease create a summary first by:\n1. Opening the scene's menu (...)\n2. Selecting "Summary"\n3. Clicking "Summarize" then "Save"`);
+                    alert(tr(app, 'alerts.sceneNoSummary', { title: scene.title }));
                     app.showSceneSearch = false;
                     return;
                 }
 
                 if (isStale) {
-                    const proceed = confirm(`⚠️ Scene "${scene.title}" has an outdated summary.\n\nThe summary may not reflect recent changes.\n\nDo you want to use it anyway?\n\n(Tip: Update the summary first for better results)`);
+                    const proceed = confirm(tr(app, 'alerts.sceneSummaryOutdated', { title: scene.title }));
                     if (!proceed) {
                         app.showSceneSearch = false;
                         return;

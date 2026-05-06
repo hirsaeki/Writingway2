@@ -1,5 +1,6 @@
 // src/modules/workshop.js
 // Extracted workshop chat/session logic from app.js
+const workshopModuleTr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
 
 const Workshop = {
     async loadWorkshopSessions(app) {
@@ -71,7 +72,7 @@ const Workshop = {
     renameWorkshopSession(app, index) {
         const session = app.workshopSessions[index];
         if (!session) return;
-        const newName = prompt('Rename conversation:', session.name);
+        const newName = prompt(workshopModuleTr(app, 'workshop.renameConversation'), session.name);
         if (newName && newName.trim()) {
             session.name = newName.trim();
             app.workshopSessions = [...app.workshopSessions];
@@ -81,7 +82,7 @@ const Workshop = {
     async clearWorkshopSession(app, index) {
         const session = app.workshopSessions[index];
         if (!session) return;
-        if (confirm('Clear all messages in this conversation? The conversation will be kept but all messages will be deleted.')) {
+        if (confirm(workshopModuleTr(app, 'alerts.clearConversation'))) {
             session.messages = [];
             await Workshop.saveWorkshopSessions(app);
         }
@@ -89,15 +90,15 @@ const Workshop = {
     exportWorkshopSession(app, index) {
         const session = app.workshopSessions[index];
         if (!session || !session.messages || session.messages.length === 0) {
-            alert('No messages to export.');
+            alert(workshopModuleTr(app, 'alerts.noMessagesExport'));
             return;
         }
         let markdown = `# ${session.name}\n\n`;
-        markdown += `*Created: ${new Date(session.createdAt).toLocaleString()}*\n\n`;
+        markdown += `*${workshopModuleTr(app, 'workshop.exportCreated')}: ${new Date(session.createdAt).toLocaleString(window.I18n ? window.I18n.locale() : undefined)}*\n\n`;
         markdown += `---\n\n`;
         for (const msg of session.messages) {
-            const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
-            const role = msg.role === 'user' ? '**You**' : '**Assistant**';
+            const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString(window.I18n ? window.I18n.locale() : undefined) : '';
+            const role = msg.role === 'user' ? `**${workshopModuleTr(app, 'workshop.you')}**` : `**${workshopModuleTr(app, 'workshop.assistant')}**`;
             markdown += `### ${role}${timestamp ? ' (' + timestamp + ')' : ''}\n\n`;
             markdown += `${msg.content}\n\n`;
             markdown += `---\n\n`;
@@ -113,10 +114,10 @@ const Workshop = {
     },
     async deleteWorkshopSession(app, index) {
         if (app.workshopSessions.length <= 1) {
-            alert('You must have at least one chat session.');
+            alert(workshopModuleTr(app, 'alerts.needOneChat'));
             return;
         }
-        if (confirm('Delete this chat session? This cannot be undone.')) {
+        if (confirm(workshopModuleTr(app, 'alerts.deleteChat'))) {
             app.workshopSessions.splice(index, 1);
             if (app.currentWorkshopSessionIndex >= app.workshopSessions.length) {
                 app.currentWorkshopSessionIndex = app.workshopSessions.length - 1;
