@@ -72,44 +72,31 @@ Unlike its predecessor, this new version is built with **JavaScript + HTML**, ma
 **Windows:**
 1. **Download** the latest ZIP release
 2. **Extract** the folder anywhere
-3. **Download llama.cpp** (for local AI):
-   - [CUDA (NVIDIA GPU)](https://github.com/ggerganov/llama.cpp/releases) - Download `llama-*-bin-win-cuda-cu12.2.0-x64.zip`
-   - [CPU only](https://github.com/ggerganov/llama.cpp/releases) - Download `llama-*-bin-win-avx2-x64.zip`
-   - Extract `llama-server.exe` to the Writingway folder
-4. **Download a model** (optional, for local AI):
-   - [Qwen3-4B-Instruct](https://huggingface.co/unsloth/Qwen3-4B-Thinking-2507-GGUF/resolve/main/Qwen3-4B-Thinking-2507-Q4_K_M.gguf?download=true)
-   - Put the `.gguf` file in the `models/` folder
-5. Double-click **`start.bat`**
-6. Writingway opens at **http://localhost:8000**
+3. Double-click **`start.bat`**
+4. Writingway opens at **http://localhost:8787/main.html**
+5. Configure AI from **Settings → AI Configuration**
 
 **Mac:**
 1. **Download** the latest ZIP release
 2. **Extract** the folder anywhere
-3. **Download llama.cpp** (for local AI):
-   - [Apple Silicon (M1/M2/M3)](https://github.com/ggerganov/llama.cpp/releases) - Download `llama-*-bin-macos-arm64.zip`
-   - [Intel Mac](https://github.com/ggerganov/llama.cpp/releases) - Download `llama-*-bin-macos-x64.zip`
-   - Extract `llama-server` to the Writingway folder
-4. **Download a model** (optional, same as Windows step 4)
-5. Run in Terminal:
+3. Run in Terminal:
    ```bash
    chmod +x start.sh
    ./start.sh
    ```
-6. Writingway opens at **http://localhost:8000**
+4. Writingway opens at **http://localhost:8787/main.html**
+5. Configure AI from **Settings → AI Configuration**
 
 **Linux:**
 1. **Download** the latest ZIP release
 2. **Extract** the folder anywhere
-3. **Download llama.cpp** (for local AI):
-   - [Ubuntu/Debian x64](https://github.com/ggerganov/llama.cpp/releases) - Download `llama-*-bin-ubuntu-x64.zip`
-   - Extract `llama-server` to the Writingway folder
-4. **Download a model** (optional, same as Windows step 4)
-5. Run in Terminal:
+3. Run in Terminal:
    ```bash
    chmod +x start.sh
    ./start.sh
    ```
-6. Writingway opens at **http://localhost:8000**
+4. Writingway opens at **http://localhost:8787/main.html**
+5. Configure AI from **Settings → AI Configuration**
 
 ### Alternative: Use Cloud AI (No Local Model Needed)
 
@@ -268,7 +255,7 @@ Built with HTML + Alpine.js:
 
 ## ⚙️ AI Setup (Optional)
 
-Writingway 2 works out of the box with **local models**, meaning 100% privacy.
+Writingway 2 works with local and online AI providers. For local inference, run LM Studio, Ollama, Jan, or a compatible endpoint, then configure it in the app.
 
 If using an online AI:
 1. Open **Settings → AI Configuration**  
@@ -282,7 +269,7 @@ Writingway never sends your writing anywhere unless you configure it to do so.
 ## ❓ Troubleshooting
 
 ### Browser didn’t open automatically  
-Visit: **http://localhost:8000**
+Visit: **http://localhost:8787/main.html**
 
 ### `start.bat` closes immediately  
 Open a command prompt and run:

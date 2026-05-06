@@ -21,6 +21,8 @@ todo.md
 .continue/
 # Ignore Claude Code
 .claude/
+# Ignore Codex local config
+.codex/
 # Update staging folder
 .update/
 # Node modules

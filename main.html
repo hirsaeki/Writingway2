@@ -87,10 +87,10 @@
                 <div style="position:absolute;top:20px;right:20px;display:flex;gap:8px;align-items:center;">
                     <label style="display:flex;align-items:center;gap:6px;color:rgba(255,255,255,0.75);font-size:12px;">
                         <span x-text="t('language.label')"></span>
-                        <select x-model="language" @change="setLanguage(language)"
+                        <select :value="language" @change="setLanguage($event.target.value)"
                             style="padding:7px 10px;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:white;">
-                            <option value="ja" x-text="t('language.japanese')"></option>
-                            <option value="en" x-text="t('language.english')"></option>
+                            <option value="ja">日本語</option>
+                            <option value="en">English</option>
                         </select>
                     </label>
                     <button class="btn btn-secondary" @click="showAISettings = true" style="padding:8px 16px;"
@@ -231,10 +231,10 @@
                         <p x-text="t('sidebar.tagline')"></p>
 
                         <label style="position:absolute;top:12px;right:58px;display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-secondary);">
-                            <select x-model="language" @change="setLanguage(language)"
+                            <select :value="language" @change="setLanguage($event.target.value)"
                                 style="max-width:86px;padding:5px 7px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:11px;">
-                                <option value="ja" x-text="t('language.japanese')"></option>
-                                <option value="en" x-text="t('language.english')"></option>
+                                <option value="ja">日本語</option>
+                                <option value="en">English</option>
                             </select>
                         </label>
 

@@ -1473,8 +1473,8 @@
         return normalized;
     }
 
-    function translate(key, params, fallback) {
-        const lang = getLanguage();
+    function translate(key, params, fallback, languageOverride) {
+        const lang = normalizeLanguage(languageOverride || getLanguage());
         const value = getNestedValue(window.i18n[lang], key);
         const fallbackValue = getNestedValue(window.i18n[FALLBACK_LANGUAGE], key);
         const resolved = value !== undefined ? value : (fallbackValue !== undefined ? fallbackValue : (fallback !== undefined ? fallback : key));

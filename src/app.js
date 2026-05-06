@@ -37,7 +37,7 @@ document.addEventListener('alpine:init', () => {
             t(key, params, fallback) {
                 // Touch reactive language so Alpine re-renders translated expressions on change.
                 const lang = this.language;
-                return window.t ? window.t(key, params, fallback) : (fallback || key || lang);
+                return window.t ? window.t(key, params, fallback, lang) : (fallback || key || lang);
             },
 
             setLanguage(lang) {
