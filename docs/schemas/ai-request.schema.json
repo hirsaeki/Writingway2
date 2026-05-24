@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://writingway.local/schemas/ai-request.schema.json",
+  "title": "Writingway 2 Internal AI Request",
+  "type": "object",
+  "required": ["task", "messages"],
+  "additionalProperties": true,
+  "properties": {
+    "task": {
+      "type": "string",
+      "enum": [
+        "prose.generate",
+        "rewrite",
+        "scene.summarize",
+        "compendium.extract",
+        "plot.generate",
+        "template.customize",
+        "beat.expand",
+        "workshop.chat"
+      ]
+    },
+    "system": { "type": "string" },
+    "messages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Message" }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "projectId": { "type": "string" },
+        "sceneId": { "type": "string" },
+        "chapterId": { "type": "string" },
+        "beatIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "compendiumIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "templateId": { "type": "string" },
+        "plotPlanId": { "type": "string" }
+      }
+    },
+    "responseSchema": {
+      "anyOf": [
+        { "type": "null" },
+        { "type": "object" }
+      ]
+    },
+    "tools": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "stream": { "type": "boolean" },
+    "modelProfile": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "provider": { "type": "string" },
+        "model": { "type": "string" },
+        "supportsTools": { "type": "boolean" },
+        "supportsStructuredOutput": { "type": "boolean" },
+        "supportsVision": { "type": "boolean" },
+        "contextWindow": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    },
+    "generation": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "temperature": { "type": "number", "minimum": 0, "maximum": 2 },
+        "maxOutputTokens": { "type": "integer", "minimum": 1 },
+        "reasoningEffort": {
+          "type": "string",
+          "enum": ["none", "low", "medium", "high"]
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "Message": {
+      "type": "object",
+      "required": ["role", "content"],
+      "additionalProperties": true,
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["system", "developer", "user", "assistant", "tool"]
+        },
+        "content": { "type": "string" },
+        "name": { "type": "string" },
+        "toolCallId": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://writingway.local/schemas/beat-template-v2.schema.json",
+  "title": "Writingway 2 Beat Template Export v2",
+  "type": "object",
+  "required": ["format", "version", "exportedAt", "template"],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "writingway2.beat-template"
+    },
+    "version": {
+      "const": 2
+    },
+    "exportedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "template": {
+      "$ref": "#/$defs/BeatTemplate"
+    }
+  },
+  "$defs": {
+    "BeatTemplate": {
+      "type": "object",
+      "required": ["id", "name", "version", "source", "slots"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "const": 2 },
+        "builtIn": { "type": "boolean" },
+        "source": {
+          "type": "string",
+          "enum": ["builtIn", "custom", "imported", "aiCustomized"]
+        },
+        "baseTemplateId": { "type": "string" },
+        "description": { "type": "string" },
+        "medium": {
+          "type": "string",
+          "enum": ["novel", "screenplay", "shortStory", "manga", "game", "general"]
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "slots": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/BeatTemplateSlot" }
+        },
+        "customization": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "instruction": { "type": "string" },
+            "changeSummary": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "aiRunId": { "type": "string" }
+          }
+        },
+        "created": {},
+        "modified": {},
+        "updatedAt": { "type": ["number", "integer"] }
+      }
+    },
+    "BeatTemplateSlot": {
+      "type": "object",
+      "required": ["id", "title", "order", "description", "purpose"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "order": { "type": "integer", "minimum": 0 },
+        "description": { "type": "string" },
+        "purpose": { "type": "string" },
+        "recommendedPosition": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "percentStart": { "type": "number", "minimum": 0, "maximum": 100 },
+                "percentEnd": { "type": "number", "minimum": 0, "maximum": 100 }
+              }
+            }
+          ]
+        },
+        "promptHint": { "type": "string" },
+        "requiredInputs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "outputSchema": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "object" }
+          ]
+        },
+        "examples": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

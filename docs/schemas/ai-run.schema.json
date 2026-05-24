@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://writingway.local/schemas/ai-run.schema.json",
+  "title": "Writingway 2 AI Run Record",
+  "type": "object",
+  "required": ["id", "task", "provider", "model", "status", "created"],
+  "additionalProperties": true,
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "projectId": { "type": "string" },
+    "sceneId": { "type": "string" },
+    "chapterId": { "type": "string" },
+    "templateId": { "type": "string" },
+    "plotPlanId": { "type": "string" },
+    "task": {
+      "type": "string",
+      "enum": [
+        "prose.generate",
+        "rewrite",
+        "scene.summarize",
+        "compendium.extract",
+        "plot.generate",
+        "template.customize",
+        "beat.expand",
+        "workshop.chat"
+      ]
+    },
+    "provider": { "type": "string" },
+    "model": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["started", "succeeded", "failed", "cancelled"]
+    },
+    "requestSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "promptChars": { "type": "integer", "minimum": 0 },
+        "messageCount": { "type": "integer", "minimum": 0 },
+        "hasSchema": { "type": "boolean" },
+        "contextKinds": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "responseSummary": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "outputChars": { "type": "integer", "minimum": 0 },
+        "structured": { "type": "boolean" },
+        "validationErrors": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "inputTokens": { "type": "integer", "minimum": 0 },
+        "outputTokens": { "type": "integer", "minimum": 0 },
+        "totalTokens": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "message": { "type": "string" },
+        "status": { "type": ["integer", "string"] },
+        "providerCode": { "type": "string" }
+      }
+    },
+    "created": {},
+    "updatedAt": { "type": ["number", "integer"] }
+  }
+}
