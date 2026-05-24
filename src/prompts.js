@@ -1,6 +1,11 @@
 // Prompts module — exposes window.Prompts with functions that operate on the shared `db` instance
 (function () {
     const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+    const SUPPORTED_CATEGORIES = ['structure', 'prose', 'style', 'rewrite', 'summary', 'workshop', 'custom'];
+
+    function normalizeCategory(category) {
+        return SUPPORTED_CATEGORIES.includes(category) ? category : 'custom';
+    }
 
     async function loadPrompts(app) {
         if (!app.currentProject) {
@@ -8,7 +13,8 @@
             return;
         }
         try {
-            app.prompts = await db.prompts.where('projectId').equals(app.currentProject.id).sortBy('modified');
+            const prompts = await db.prompts.where('projectId').equals(app.currentProject.id).sortBy('modified');
+            app.prompts = prompts.map(p => ({ ...p, category: normalizeCategory(p.category) }));
             // ensure collapsed map has entries
             for (let c of app.promptCategories) {
                 if (app.promptCollapsed[c] === undefined) app.promptCollapsed[c] = false;
@@ -21,6 +27,7 @@
 
     async function createPrompt(app, category) {
         if (!app.currentProject) return;
+        category = normalizeCategory(category);
         const title = app.newPromptTitle && app.newPromptTitle.trim() ? app.newPromptTitle.trim() : tr(app, 'prompts.newPrompt', {}, 'New Prompt');
         const id = Date.now().toString();
         const now = new Date();
@@ -227,7 +234,7 @@
                 await db.prompts.add({
                     id,
                     projectId: app.currentProject.id,
-                    category: p.category || 'prose',
+                    category: normalizeCategory(p.category || 'custom'),
                     title: p.title || tr(app, 'prompts.importedPrompt', {}, 'Imported Prompt'),
                     content: p.content || '',
                     systemContent: p.systemContent || '',
@@ -259,6 +266,8 @@
         movePromptDown,
         renamePrompt,
         exportPrompts,
-        importPrompts
+        importPrompts,
+        supportedCategories: SUPPORTED_CATEGORIES,
+        normalizeCategory
     };
 })();

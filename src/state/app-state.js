@@ -19,6 +19,8 @@ function createAppState() {
         exportFormat: 'zip', // 'zip', 'epub', 'html', 'txt'
         exportIncludeSceneTitles: true, // Include scene titles in export (not applicable to ZIP)
         showAISettings: false,
+        showDataManagement: false,
+        showBeatsPanel: false,
         showPromptsPanel: false,
         showPromptHistory: false,
         promptHistoryList: [],
@@ -132,6 +134,20 @@ function createAppState() {
         quickInsertedScenes: [],
         beatSceneMap: {}, // {'Scene 1': 'id456'}
 
+        // ========== Real Story Beats ==========
+        beats: [],
+        beatTemplates: [],
+        beatScopeFilter: 'all',
+        newBeatTitle: '',
+        newBeatBody: '',
+        newBeatScope: 'project',
+        newBeatChapterId: '',
+        newBeatSceneId: '',
+        newBeatStatus: 'planned',
+        selectedBeatTemplateId: '',
+        newBeatTemplateName: '',
+        newBeatTemplateSlots: '',
+
         // ========== Scene Generation Options ==========
         showSceneOptions: false,
         showContextPanel: false,
@@ -168,7 +184,7 @@ function createAppState() {
 
         // ========== Prompts / Codex State ==========
         prompts: [],
-        promptCategories: ['prose', 'rewrite', 'summary', 'workshop'],
+        promptCategories: ['structure', 'prose', 'style', 'rewrite', 'summary', 'workshop', 'custom'],
         promptCollapsed: {},
         currentPrompt: {},
         promptEditorContent: '', // User message content
@@ -221,6 +237,7 @@ function createAppState() {
         showRestoreModal: false,
         backupList: [],
         currentProjectGistId: '',
+        backupNoticeDismissed: false,
 
         // ========== Generation Parameters ==========
         temperature: 0.8,

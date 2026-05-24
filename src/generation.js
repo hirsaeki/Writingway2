@@ -1,6 +1,7 @@
 // Generation helpers module
 // Exposes window.Generation with:
 // - buildPrompt(beat, sceneContext, options) => string
+// TODO(product): Internal beat* names currently mean generation Briefs. Rename after real Beats get a data model.
 // - streamGeneration(prompt, onToken(token)) => Promise<void>
 (function () {
     const tr = (key, params, fallback) => window.t ? window.t(key, params, fallback) : (fallback || key);
@@ -25,7 +26,7 @@
                 .replace(/\{pov\}/gi, povText);
         } else {
             // Default fallback system prompt
-            systemPrompt = `${povSentence} You are a creative writing assistant. The author provides a BEAT (what happens next) and you expand it into vivid, engaging prose. Write 2-3 paragraphs that bring the beat to life. Match the author's tone and style. Use sensory details. Show, don't tell.`;
+            systemPrompt = `${povSentence} You are a creative writing assistant. The author provides a BRIEF (what happens next) and you expand it into vivid, engaging prose. Write 2-3 paragraphs that bring the brief to life. Match the author's tone and style. Use sensory details. Show, don't tell.`;
         }
 
         let contextText = '';
@@ -34,7 +35,7 @@
             contextText = `\n\nCURRENT SCENE SO FAR:\n${sceneContext}`;
         }
 
-        // If a prose prompt template is provided, include it before the BEAT so the model can use it.
+        // If a prose prompt template is provided, include it before the BRIEF so the model can use it.
         // When `options.preview === true` we avoid adding explicit debug markers so the preview is cleaner.
         let proseTemplateText = '';
         if (options.prosePrompt && typeof options.prosePrompt === 'string' && options.prosePrompt.trim()) {
@@ -46,7 +47,7 @@
             }
         }
 
-        // If compendium entries are provided, include them as references before the BEAT.
+        // If compendium entries are provided, include them as references before the BRIEF.
         let compendiumText = '';
         if (options.compendiumEntries && Array.isArray(options.compendiumEntries) && options.compendiumEntries.length > 0) {
             compendiumText = '\n\nCOMPENDIUM REFERENCES:\n';
@@ -59,7 +60,7 @@
             }
         }
 
-        // If scene summaries are provided, include them as context before the BEAT.
+        // If scene summaries are provided, include them as context before the BRIEF.
         let sceneSummariesText = '';
         if (options.sceneSummaries && Array.isArray(options.sceneSummaries) && options.sceneSummaries.length > 0) {
             sceneSummariesText = '\n\nPREVIOUS SCENES:\n';
@@ -74,7 +75,15 @@
             }
         }
 
-        let userContent = `${contextText}${proseTemplateText}`;
+        let beatReferencesText = '';
+        if (options.beatReferences && Array.isArray(options.beatReferences) && options.beatReferences.length > 0) {
+            beatReferencesText = '\n\nSTORY BEAT REFERENCES:\n';
+            for (const beatRef of options.beatReferences) {
+                beatReferencesText += `\n- ${beatRef.title || 'Beat'} (${beatRef.status || 'planned'}): ${beatRef.body || ''}`;
+            }
+        }
+
+        let userContent = `${contextText}${proseTemplateText}${beatReferencesText}`;
         if (compendiumText) {
             userContent += compendiumText;
         }
@@ -91,7 +100,7 @@
         // Clean up extra whitespace
         cleanedBeat = cleanedBeat.replace(/\s+/g, ' ').trim();
 
-        userContent += `\n\nBEAT TO EXPAND:\n${cleanedBeat}\n\nWrite the next 2-3 paragraphs:`;
+        userContent += `\n\nBRIEF TO EXPAND:\n${cleanedBeat}\n\nWrite the next 2-3 paragraphs:`;
 
         // Keep buildPrompt's public contract as a string. Several UI previews and
         // tests call string methods directly on this return value.
@@ -610,7 +619,9 @@
             panelContext.sceneSummaries.forEach(s => sceneMap.set(s.title, s));
             beatSceneSummaries.forEach(s => sceneMap.set(s.title, s));
             const sceneSummaries = Array.from(sceneMap.values());
-            const genOpts = { povCharacter: app.povCharacter, pov: app.pov, tense: app.tense, prosePrompt: prosePromptText, systemPrompt: systemPromptText, compendiumEntries: compEntries, sceneSummaries: sceneSummaries };
+            let beatReferences = [];
+            try { beatReferences = window.Beats ? await window.Beats.getBeatReferencesForScene(app.currentScene?.id) : []; } catch (e) { beatReferences = []; }
+            const genOpts = { povCharacter: app.povCharacter, pov: app.pov, tense: app.tense, prosePrompt: prosePromptText, systemPrompt: systemPromptText, compendiumEntries: compEntries, sceneSummaries: sceneSummaries, beatReferences };
             const generationApi = window.Generation || {};
             const buildPromptFn = typeof generationApi.buildPrompt === 'function' ? generationApi.buildPrompt : buildPrompt;
             const streamGenerationFn = typeof generationApi.streamGeneration === 'function' ? generationApi.streamGeneration : streamGeneration;

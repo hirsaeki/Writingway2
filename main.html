@@ -30,6 +30,8 @@
     <script defer src="src/modules/compendium-manager.js"></script>
     <script defer src="src/modules/ai-settings.js"></script>
     <script defer src="src/modules/github-backup.js"></script>
+    <script defer src="src/modules/data-management.js"></script>
+    <script defer src="src/modules/beats.js"></script>
     <script defer src="src/modules/tab-sync.js"></script>
     <script defer src="src/template-loader.js"></script>
     <script defer src="src/workshop.js"></script>
@@ -256,9 +258,10 @@
                                 <div style="border-top:1px solid var(--border);margin:6px 0"></div>
                                 <button @click.stop="openCompendium(); mainMenuOpen=false">📚 <span x-text="t('sidebar.compendium')"></span></button>
                                 <button @click.stop="showWorkshopChat = true; mainMenuOpen=false">💬 <span x-text="t('sidebar.workshopChat')"></span></button>
+                                <button @click.stop="openBeatsPanel(); mainMenuOpen=false">🧭 <span x-text="t('sidebar.beats')"></span></button>
                                 <button @click.stop="showAISettings = true; mainMenuOpen=false">⚙️ <span x-text="t('sidebar.aiSettings')"></span></button>
                                 <button @click.stop="showPromptsPanel = true; mainMenuOpen=false">📝 <span x-text="t('sidebar.managePrompts')"></span></button>
-                                <button @click.stop="openBackupSettings(); mainMenuOpen=false">☁️ <span x-text="t('sidebar.cloudBackup')"></span></button>
+                                <button @click.stop="openDataManagement(); mainMenuOpen=false">🗂️ <span x-text="t('sidebar.dataManagement')"></span></button>
                                 <div style="border-top:1px solid var(--border);margin:6px 0"></div>
                                 <button @click.stop="checkForUpdates(); mainMenuOpen=false"
                                     :disabled="checkingForUpdates">
@@ -436,9 +439,10 @@
 
                 <!-- Main Content Area (wrapper for banner + editor) -->
                 <div class="main-content-area">
-                    <!-- Auto-Backup Warning Banner (non-dismissable) -->
-                    <div x-show="!backupEnabled || !githubToken" x-cloak class="backup-warning-banner"
-                        x-text="t('sidebar.backupWarning')">
+                    <!-- Local backup notice. Cloud/Gist backup is optional; internal backup state remains separate. -->
+                    <div x-show="(!backupEnabled || !githubToken) && !backupNoticeDismissed" x-cloak class="backup-warning-banner">
+                        <span x-text="t('sidebar.backupWarning')"></span>
+                        <button type="button" class="backup-warning-dismiss" @click="dismissBackupNotice()" :aria-label="t('common.dismiss')">×</button>
                     </div>
 
                     <!-- Editor -->
@@ -1558,6 +1562,170 @@
                     <p style="margin:0;font-size:13px;line-height:1.6;">
                         <strong x-text="t('welcome.noteLabel')"></strong> <span x-text="t('backup.note')"></span>
                     </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Management Panel -->
+        <div class="slide-panel-right" :class="{ 'open': showDataManagement }" x-cloak>
+            <div class="slide-panel-header">
+                <h3 style="margin:0;">🗂️ <span x-text="t('dataManagement.title')"></span></h3>
+                <button class="btn btn-secondary" @click="closeDataManagement()" x-text="t('common.close')"></button>
+            </div>
+            <div class="slide-panel-body" style="padding:20px;">
+                <p style="margin:0 0 20px 0;color:var(--text-secondary);font-size:14px;line-height:1.6;" x-text="t('dataManagement.intro')"></p>
+
+                <div style="border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">
+                    <h4 style="margin:0 0 12px 0;" x-text="t('dataManagement.localBackup')"></h4>
+                    <div style="display:grid;gap:10px;">
+                        <button class="btn btn-secondary" @click="exportAllDataJson()">
+                            <span x-text="t('dataManagement.exportAll')"></span>
+                        </button>
+                        <button class="btn btn-secondary" @click="document.getElementById('importAllDataJsonInput').click()">
+                            <span x-text="t('dataManagement.importAll')"></span>
+                        </button>
+                        <input type="file" id="importAllDataJsonInput" accept=".json,application/json"
+                            @change="importAllDataJson($event); $event.target.value = null" style="display:none;">
+                    </div>
+                </div>
+
+                <div style="border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">
+                    <h4 style="margin:0 0 12px 0;" x-text="t('dataManagement.projectBackup')"></h4>
+                    <div style="display:grid;gap:10px;">
+                        <button class="btn btn-secondary" @click="exportCurrentProjectJson()" :disabled="!currentProject">
+                            <span x-text="t('dataManagement.exportCurrentProject')"></span>
+                        </button>
+                        <button class="btn btn-secondary" @click="document.getElementById('importProjectJsonInput').click()">
+                            <span x-text="t('dataManagement.importProject')"></span>
+                        </button>
+                        <input type="file" id="importProjectJsonInput" accept=".json,application/json"
+                            @change="importProjectJson($event); $event.target.value = null" style="display:none;">
+                    </div>
+                </div>
+
+                <div style="border:1px solid var(--border);border-radius:8px;padding:16px;">
+                    <h4 style="margin:0 0 8px 0;" x-text="t('dataManagement.cloudBackup')"></h4>
+                    <p style="margin:0 0 12px 0;color:var(--text-secondary);font-size:13px;line-height:1.5;" x-text="t('dataManagement.githubDescription')"></p>
+                    <button class="btn btn-secondary" @click="openCloudBackupFromDataManagement()" style="width:100%;">
+                        ☁️ <span x-text="t('dataManagement.githubSettings')"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Story Beats Panel -->
+        <div class="slide-panel-right" :class="{ 'open': showBeatsPanel }" x-cloak>
+            <div class="slide-panel-header">
+                <h3 style="margin:0;">🧭 <span x-text="t('beats.title')"></span></h3>
+                <button class="btn btn-secondary" @click="closeBeatsPanel()" x-text="t('common.close')"></button>
+            </div>
+            <div class="slide-panel-body" style="padding:20px;">
+                <div style="border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">
+                    <h4 style="margin:0 0 12px 0;" x-text="t('beats.newBeat')"></h4>
+                    <input x-model="newBeatTitle" :placeholder="t('beats.titlePlaceholder')"
+                        style="width:100%;padding:10px;margin-bottom:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);">
+                    <textarea x-model="newBeatBody" :placeholder="t('beats.bodyPlaceholder')" rows="4"
+                        style="width:100%;padding:10px;margin-bottom:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"></textarea>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+                        <select x-model="newBeatScope">
+                            <option value="project" x-text="t('beats.scopeProject')"></option>
+                            <option value="chapter" x-text="t('beats.scopeChapter')"></option>
+                            <option value="scene" x-text="t('beats.scopeScene')"></option>
+                        </select>
+                        <select x-model="newBeatStatus">
+                            <option value="planned" x-text="t('beats.statusPlanned')"></option>
+                            <option value="drafted" x-text="t('beats.statusDrafted')"></option>
+                            <option value="revised" x-text="t('beats.statusRevised')"></option>
+                            <option value="cut" x-text="t('beats.statusCut')"></option>
+                        </select>
+                    </div>
+                    <select x-show="newBeatScope === 'chapter'" x-model="newBeatChapterId" style="width:100%;margin-bottom:8px;">
+                        <option value="" x-text="t('beats.chooseChapter')"></option>
+                        <template x-for="chapter in chapters" :key="chapter.id">
+                            <option :value="chapter.id" x-text="chapter.title"></option>
+                        </template>
+                    </select>
+                    <select x-show="newBeatScope === 'scene'" x-model="newBeatSceneId" style="width:100%;margin-bottom:8px;">
+                        <option value="" x-text="t('beats.chooseScene')"></option>
+                        <template x-for="scene in scenes" :key="scene.id">
+                            <option :value="scene.id" x-text="scene.title"></option>
+                        </template>
+                    </select>
+                    <button class="btn btn-primary" @click="createBeat()" :disabled="!currentProject || !newBeatTitle.trim()" style="width:100%;" x-text="t('beats.create')"></button>
+                </div>
+
+                <div style="border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px;">
+                    <h4 style="margin:0 0 12px 0;" x-text="t('beats.templates')"></h4>
+                    <div style="display:flex;gap:8px;">
+                        <select x-model="selectedBeatTemplateId" style="flex:1;">
+                            <option value="" x-text="t('beats.chooseTemplate')"></option>
+                            <template x-for="template in beatTemplates" :key="template.id">
+                                <option :value="template.id" x-text="template.name"></option>
+                            </template>
+                        </select>
+                        <button class="btn btn-secondary" @click="createBeatsFromTemplate()" :disabled="!currentProject || !selectedBeatTemplateId" x-text="t('beats.applyTemplate')"></button>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button class="btn btn-secondary" @click="exportSelectedBeatTemplate()" :disabled="!selectedBeatTemplateId" x-text="t('beats.exportTemplate')"></button>
+                        <button class="btn btn-secondary" @click="document.getElementById('importBeatTemplateInput').click()" x-text="t('beats.importTemplate')"></button>
+                        <input type="file" id="importBeatTemplateInput" accept=".json,application/json"
+                            @change="importBeatTemplate($event); $event.target.value = null" style="display:none;">
+                    </div>
+                    <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;">
+                        <input x-model="newBeatTemplateName" :placeholder="t('beats.templateNamePlaceholder')"
+                            style="width:100%;padding:10px;margin-bottom:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);">
+                        <textarea x-model="newBeatTemplateSlots" :placeholder="t('beats.templateSlotsPlaceholder')" rows="4"
+                            style="width:100%;padding:10px;margin-bottom:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"></textarea>
+                        <button class="btn btn-secondary" @click="createBeatTemplate()" :disabled="!newBeatTemplateName.trim() || !newBeatTemplateSlots.trim()" style="width:100%;" x-text="t('beats.createTemplate')"></button>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:8px;margin-bottom:12px;">
+                    <select x-model="beatScopeFilter" @change="loadBeats()" style="flex:1;">
+                        <option value="all" x-text="t('beats.allScopes')"></option>
+                        <option value="project" x-text="t('beats.scopeProject')"></option>
+                        <option value="chapter" x-text="t('beats.scopeChapter')"></option>
+                        <option value="scene" x-text="t('beats.scopeScene')"></option>
+                    </select>
+                </div>
+
+                <div style="display:grid;gap:10px;">
+                    <template x-for="beat in beats" :key="beat.id">
+                        <div style="border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--bg-primary);">
+                            <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">
+                                <div style="min-width:0;">
+                                    <strong x-text="beat.title"></strong>
+                                    <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">
+                                        <span x-text="t('beats.scopeLabel')"></span>
+                                        <span x-text="t(`beats.scope_${beat.scope}`)"></span>
+                                        <span> · </span>
+                                        <span x-text="t(`beats.status_${beat.status}`)"></span>
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:4px;flex-shrink:0;">
+                                    <button class="btn btn-secondary" @click="moveBeat(beat.id, -1)">↑</button>
+                                    <button class="btn btn-secondary" @click="moveBeat(beat.id, 1)">↓</button>
+                                    <button class="btn btn-secondary" @click="deleteBeat(beat.id)">×</button>
+                                </div>
+                            </div>
+                            <p style="white-space:pre-wrap;margin:8px 0 0 0;color:var(--text-secondary);font-size:13px;" x-text="beat.body"></p>
+                            <div style="display:flex;gap:8px;margin-top:10px;">
+                                <select :value="beat.status" @change="updateBeatStatus(beat.id, $event.target.value)">
+                                    <option value="planned" x-text="t('beats.statusPlanned')"></option>
+                                    <option value="drafted" x-text="t('beats.statusDrafted')"></option>
+                                    <option value="revised" x-text="t('beats.statusRevised')"></option>
+                                    <option value="cut" x-text="t('beats.statusCut')"></option>
+                                </select>
+                                <select :value="beat.sceneId || ''" @change="linkBeatToScene(beat.id, $event.target.value)">
+                                    <option value="" x-text="t('beats.noSceneLink')"></option>
+                                    <template x-for="scene in scenes" :key="scene.id">
+                                        <option :value="scene.id" x-text="scene.title"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+                    </template>
+                    <p x-show="beats.length === 0" style="color:var(--text-secondary);font-size:13px;" x-text="t('beats.empty')"></p>
                 </div>
             </div>
         </div>

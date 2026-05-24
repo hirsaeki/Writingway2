@@ -947,21 +947,44 @@ body {
 /* Auto-Backup Warning Banner */
 .backup-warning-banner {
     width: 100%;
-    background: #dc2626;
-    color: #fff;
-    font-weight: 700;
-    text-align: center;
-    padding: 12px 20px;
+    background: rgba(245, 158, 11, 0.14);
+    border-bottom: 1px solid rgba(245, 158, 11, 0.35);
+    color: var(--text-primary);
+    font-weight: 500;
+    text-align: left;
+    padding: 10px 48px 10px 20px;
     font-size: 14px;
-    letter-spacing: 0.5px;
-    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.4);
+    letter-spacing: 0;
     flex-shrink: 0;
+    position: relative;
+    line-height: 1.4;
 }
 
 html.light-mode .backup-warning-banner,
 .light-mode .backup-warning-banner {
-    background: #ef4444;
-    color: #fff;
+    background: rgba(245, 158, 11, 0.16);
+    color: var(--text-primary);
+}
+
+.backup-warning-dismiss {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: 1px solid var(--border);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+}
+
+.backup-warning-dismiss:hover {
+    color: var(--text-primary);
+    border-color: var(--accent);
 }
 
 .editor-container {

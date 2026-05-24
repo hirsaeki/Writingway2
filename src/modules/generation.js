@@ -1,5 +1,6 @@
 // src/modules/generation.js
 // Extracted generation logic from app.js
+// TODO(product): Internal beat* names currently mean generation Briefs. Rename after real Beats get a data model.
 
 const Generation = {
     // Build the prompt for AI generation
@@ -9,7 +10,7 @@ const Generation = {
         // For now, just concatenate for demonstration:
         let prompt = '';
         if (opts && opts.prosePrompt) prompt += opts.prosePrompt + '\n';
-        if (beatInput) prompt += 'Beat: ' + beatInput + '\n';
+        if (beatInput) prompt += 'Brief: ' + beatInput + '\n';
         if (sceneContent) prompt += 'Scene: ' + sceneContent + '\n';
         // Add compendium and scene summaries if present
         if (opts && opts.compendiumEntries && opts.compendiumEntries.length) {
@@ -22,6 +23,12 @@ const Generation = {
             prompt += '\nScene Summaries:\n';
             opts.sceneSummaries.forEach(s => {
                 prompt += `- ${s.title}: ${s.summary || ''}\n`;
+            });
+        }
+        if (opts && opts.beatReferences && opts.beatReferences.length) {
+            prompt += '\nStory Beat References:\n';
+            opts.beatReferences.forEach(b => {
+                prompt += `- ${b.title}: ${b.body || ''}\n`;
             });
         }
         // Add POV and tense

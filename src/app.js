@@ -1878,12 +1878,14 @@ document.addEventListener('alpine:init', () => {
                     panelContext.sceneSummaries.forEach(s => sceneMap.set(s.title, s));
                     beatSceneSummaries.forEach(s => sceneMap.set(s.title, s));
                     const sceneSummaries = Array.from(sceneMap.values());
+                    let beatReferences = [];
+                    try { beatReferences = window.Beats ? await window.Beats.getBeatReferencesForScene(this.currentScene?.id) : []; } catch (e) { beatReferences = []; }
 
                     let prompt;
                     if (window.Generation && typeof window.Generation.buildPrompt === 'function') {
                         // DEBUG: log resolved prose info and options
                         try { console.debug('[preview] proseInfo=', proseInfo); } catch (e) { }
-                        const optsPreview = { povCharacter: this.povCharacter, pov: this.pov, tense: this.tense, prosePrompt: prosePromptText, systemPrompt: systemPromptText, compendiumEntries: compEntries, sceneSummaries: sceneSummaries, preview: true };
+                        const optsPreview = { povCharacter: this.povCharacter, pov: this.pov, tense: this.tense, prosePrompt: prosePromptText, systemPrompt: systemPromptText, compendiumEntries: compEntries, sceneSummaries: sceneSummaries, beatReferences, preview: true };
                         try { console.debug('[preview] buildPrompt opts:', { proseType: typeof optsPreview.prosePrompt, len: optsPreview.prosePrompt ? optsPreview.prosePrompt.length : 0 }); } catch (e) { }
                         try { console.debug('[preview] prosePrompt raw:', JSON.stringify(optsPreview.prosePrompt)); } catch (e) { }
                         prompt = window.Generation.buildPrompt(this.beatInput, this.currentScene?.content || '', optsPreview);
@@ -1926,6 +1928,25 @@ document.addEventListener('alpine:init', () => {
                     const resolvedSource = (proseInfo && proseInfo.source) ? proseInfo.source : 'none';
                     header.textContent = this.t('beat.resolvedProsePrompt', { id: resolvedId, source: resolvedSource });
 
+                    const summary = document.createElement('div');
+                    summary.style.border = '1px solid var(--border)';
+                    summary.style.borderRadius = '8px';
+                    summary.style.padding = '10px';
+                    summary.style.marginBottom = '8px';
+                    summary.style.fontSize = '13px';
+                    summary.style.lineHeight = '1.5';
+                    summary.innerHTML = [
+                        `<strong>${this.t('contextPreview.title')}</strong>`,
+                        `${this.t('contextPreview.brief')}: ${this.beatInput ? this.t('common.current') : this.t('beat.previewNone')}`,
+                        `${this.t('contextPreview.currentScene')}: ${this.currentScene?.content ? this.t('common.current') : this.t('beat.previewNone')}`,
+                        `${this.t('contextPreview.prosePrompt')}: ${prosePromptText ? resolvedId : this.t('beat.previewDefault')}`,
+                        `${this.t('contextPreview.compendium')}: ${compEntries.length}`,
+                        `${this.t('contextPreview.sceneSummaries')}: ${sceneSummaries.length}`,
+                        `${this.t('contextPreview.beatReferences')}: ${beatReferences.length}`,
+                        `${this.t('contextPreview.approxChars')}: ${String(prompt || '').length}`,
+                        `${this.t('contextPreview.approxTokens')}: ${Math.ceil(String(prompt || '').length / 4)}`
+                    ].join('<br>');
+
                     const ta = document.createElement('textarea');
                     ta.readOnly = true;
                     ta.style.width = '100%';
@@ -1958,10 +1979,22 @@ document.addEventListener('alpine:init', () => {
                         setTimeout(() => { copy.textContent = this.t('common.copy'); }, 1200);
                     };
 
+                    const toggleRaw = document.createElement('button');
+                    toggleRaw.textContent = this.t('contextPreview.hideRaw');
+                    toggleRaw.className = 'btn btn-secondary';
+                    toggleRaw.style.marginRight = '8px';
+                    toggleRaw.onclick = () => {
+                        const hidden = ta.style.display === 'none';
+                        ta.style.display = hidden ? 'block' : 'none';
+                        toggleRaw.textContent = hidden ? this.t('contextPreview.hideRaw') : this.t('contextPreview.showRaw');
+                    };
+
+                    controls.appendChild(toggleRaw);
                     controls.appendChild(copy);
                     controls.appendChild(close);
 
                     box.appendChild(header);
+                    box.appendChild(summary);
                     box.appendChild(ta);
                     box.appendChild(controls);
                     overlay.appendChild(box);
@@ -2224,6 +2257,100 @@ document.addEventListener('alpine:init', () => {
             },
 
             // ========== GitHub Backup Methods ==========
+
+            openDataManagement() {
+                if (window.DataManagement && typeof window.DataManagement.open === 'function') {
+                    return window.DataManagement.open(this);
+                }
+                this.showDataManagement = true;
+            },
+
+            closeDataManagement() {
+                if (window.DataManagement && typeof window.DataManagement.close === 'function') {
+                    return window.DataManagement.close(this);
+                }
+                this.showDataManagement = false;
+            },
+
+            openCloudBackupFromDataManagement() {
+                if (window.DataManagement && typeof window.DataManagement.openCloudBackupSettings === 'function') {
+                    return window.DataManagement.openCloudBackupSettings(this);
+                }
+                this.showDataManagement = false;
+                this.openBackupSettings();
+            },
+
+            dismissBackupNotice() {
+                this.backupNoticeDismissed = true;
+            },
+
+            async exportAllDataJson() {
+                return window.DataManagement.exportAllData(this);
+            },
+
+            async exportCurrentProjectJson() {
+                return window.DataManagement.exportCurrentProject(this);
+            },
+
+            async importAllDataJson(event) {
+                return window.DataManagement.importAllData(this, event);
+            },
+
+            async importProjectJson(event) {
+                return window.DataManagement.importProject(this, event);
+            },
+
+            async openBeatsPanel() {
+                return window.Beats.open(this);
+            },
+
+            closeBeatsPanel() {
+                return window.Beats.close(this);
+            },
+
+            async loadBeats() {
+                return window.Beats.loadBeats(this);
+            },
+
+            async createBeat() {
+                return window.Beats.createBeat(this);
+            },
+
+            async updateBeatStatus(beatId, status) {
+                return window.Beats.updateBeatStatus(this, beatId, status);
+            },
+
+            async linkBeatToScene(beatId, sceneId) {
+                return window.Beats.linkBeatToScene(this, beatId, sceneId);
+            },
+
+            async moveBeat(beatId, direction) {
+                return window.Beats.moveBeat(this, beatId, direction);
+            },
+
+            async deleteBeat(beatId) {
+                return window.Beats.deleteBeat(this, beatId);
+            },
+
+            async createBeatsFromTemplate() {
+                return window.Beats.createBeatsFromTemplate(this);
+            },
+
+            async createBeatTemplate() {
+                return window.Beats.createTemplate(this);
+            },
+
+            async exportSelectedBeatTemplate() {
+                return window.Beats.exportTemplate(this);
+            },
+
+            async importBeatTemplate(event) {
+                try {
+                    return await window.Beats.importTemplate(this, event);
+                } catch (error) {
+                    alert(error.message || error);
+                }
+            },
 
             async openBackupSettings() {
                 this.showBackupSettings = true;

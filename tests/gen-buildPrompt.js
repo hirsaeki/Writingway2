@@ -17,13 +17,13 @@ const path = require('path');
         // Wait for Generation to be available
         await page.waitForFunction(() => window.Generation && typeof window.Generation.buildPrompt === 'function', { timeout: 5000 });
 
-        const beat = "She grabs her coat and steps into the rain.";
+        const brief = "She grabs her coat and steps into the rain.";
         const sceneContext = "Alice sat by the window, watching the streetlights.";
         const options = { povCharacter: 'Alice', pov: '1st person', tense: 'present' };
 
         const prompt = await page.evaluate(({ b, s, o }) => {
             return window.Generation.buildPrompt(b, s, o);
-        }, { b: beat, s: sceneContext, o: options });
+        }, { b: brief, s: sceneContext, o: options });
 
         console.log('Generated prompt preview (first 200 chars):', prompt.slice(0, 200).replace(/\n/g, '\\n'));
 
@@ -31,8 +31,8 @@ const path = require('path');
             { ok: prompt.includes('Alice'), msg: 'POV character not found' },
             { ok: prompt.includes('present tense'), msg: 'tense text not found' },
             { ok: prompt.includes('1st person'), msg: 'POV text not found' },
-            { ok: prompt.includes('BEAT TO EXPAND') || prompt.includes('BEAT TO EXPAND:'), msg: 'beat marker missing' },
-            { ok: prompt.includes('She grabs her coat'), msg: 'beat content not included' }
+            { ok: prompt.includes('BRIEF TO EXPAND') || prompt.includes('BRIEF TO EXPAND:'), msg: 'brief marker missing' },
+            { ok: prompt.includes('She grabs her coat'), msg: 'brief content not included' }
         ];
 
         const failed = checks.filter(c => !c.ok);
