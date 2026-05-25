@@ -6,11 +6,7 @@
 (function () {
     const tr = (key, params, fallback) => window.t ? window.t(key, params, fallback) : (fallback || key);
 
-    function buildPrompt(beat, sceneContext, options = {}) {
-        try {
-            console.debug('[buildPrompt] received prosePrompt:', JSON.stringify(options.prosePrompt));
-            console.debug('[buildPrompt] received systemPrompt:', JSON.stringify(options.systemPrompt));
-        } catch (e) { /* ignore */ }
+    function buildPromptParts(beat, sceneContext, options = {}) {
         const povName = (options.povCharacter && options.povCharacter.trim()) ? options.povCharacter.trim() : 'the protagonist';
         const tenseText = (options.tense === 'present') ? 'present tense' : 'past tense';
         const povText = options.pov || '3rd person limited';
@@ -92,7 +88,7 @@
         }
 
         // Strip mention tags from beat since they're already resolved and included above
-        let cleanedBeat = beat;
+        let cleanedBeat = String(beat || '');
         // Remove @[Title] compendium mentions
         cleanedBeat = cleanedBeat.replace(/@\[([^\]]+)\]/g, '');
         // Remove #[Title] scene mentions
@@ -102,13 +98,75 @@
 
         userContent += `\n\nBRIEF TO EXPAND:\n${cleanedBeat}\n\nWrite the next 2-3 paragraphs:`;
 
+        return { systemPrompt, userContent };
+    }
+
+    function buildPromptMessages(beat, sceneContext, options = {}) {
+        const parts = buildPromptParts(beat, sceneContext, options);
+        const messages = [
+            { role: 'system', content: parts.systemPrompt },
+            { role: 'user', content: parts.userContent }
+        ];
+        return {
+            task: 'prose.generate',
+            messages,
+            asString() {
+                return messagesToChatML(this.messages);
+            }
+        };
+    }
+
+    function buildPrompt(beat, sceneContext, options = {}) {
+        const prompt = buildPromptMessages(beat, sceneContext, options);
         // Keep buildPrompt's public contract as a string. Several UI previews and
         // tests call string methods directly on this return value.
-        return `<|im_start|>system\n${systemPrompt}<|im_end|>\n<|im_start|>user\n${userContent}<|im_end|>\n<|im_start|>assistant\n`;
+        return prompt.asString();
+    }
+
+    function legacyPromptFormats(prompt, aiMode) {
+        let promptStr = prompt;
+        let messages = null;
+
+        if (prompt && typeof prompt === 'object' && Array.isArray(prompt.messages)) {
+            messages = prompt.messages;
+            if (aiMode === 'local') {
+                promptStr = typeof prompt.asString === 'function' ? prompt.asString() : messagesToChatML(messages);
+            }
+        } else if (Array.isArray(prompt)) {
+            messages = prompt;
+            if (aiMode === 'local') {
+                promptStr = messagesToChatML(messages);
+            }
+        }
+
+        return { promptStr, messages };
+    }
+
+    function buildGatewayRequest(prompt, settings, app) {
+        if (!window.AIContracts) return null;
+        const source = prompt && typeof prompt === 'object' && prompt.task && Array.isArray(prompt.messages) ? prompt : prompt;
+        return window.AIContracts.createRequest(source, {
+            task: source?.task || 'prose.generate',
+            provider: settings.provider,
+            model: settings.model,
+            stream: !settings.forceNonStreaming,
+            generation: {
+                temperature: settings.temperature,
+                maxOutputTokens: settings.maxTokens
+            },
+            context: {
+                projectId: app?.currentProject?.id || undefined,
+                sceneId: app?.currentScene?.id || undefined,
+                chapterId: app?.currentChapter?.id || app?.currentScene?.chapterId || undefined
+            },
+            metadata: {
+                source: 'generation-compatibility',
+                saveRun: false
+            }
+        });
     }
 
     async function streamGeneration(prompt, onToken, app) {
-        // Get AI settings from app if provided
         const aiMode = app?.aiMode || 'local';
         const aiProvider = app?.aiProvider || 'anthropic';
         const aiApiKey = app?.aiApiKey || '';
@@ -117,32 +175,21 @@
         const useProviderDefaults = app?.useProviderDefaults || false;
         const temperature = app?.temperature || 0.8;
         const maxTokens = app?.maxTokens || 300;
+        const { promptStr, messages } = legacyPromptFormats(prompt, aiMode);
 
-        // Convert prompt to appropriate format
-        let promptStr = prompt;
-        let messages = null;
-
-        if (typeof prompt === 'object' && prompt.messages) {
-            // buildPrompt() result with messages and asString()
-            messages = prompt.messages;
-            if (aiMode === 'local') {
-                // Use string format for local server
-                promptStr = prompt.asString();
-            }
-        } else if (Array.isArray(prompt)) {
-            // Raw messages array (e.g., from workshop chat)
-            messages = prompt;
-            if (aiMode === 'local') {
-                // Convert messages array to ChatML format for local server
-                promptStr = messagesToChatML(messages);
+        if (window.AIContracts && window.AIOrchestrator) {
+            const settings = window.AIContracts.settingsFromApp(app);
+            const request = buildGatewayRequest(prompt, settings, app);
+            if (request && window.AIOrchestrator.canHandle(request, settings)) {
+                return await window.AIOrchestrator.run(request, settings, { onToken });
             }
         }
 
         if (aiMode === 'api') {
-            // API Mode - use configured provider with messages
+            // Compatibility fallback for providers not yet moved to adapters.
             return await streamGenerationAPI(messages || promptStr, onToken, aiProvider, aiApiKey, aiModel, aiEndpoint, temperature, maxTokens, app, useProviderDefaults);
         } else {
-            // Local Mode - use llama-server with string prompt
+            // Compatibility fallback if the orchestrator scripts are unavailable.
             return await streamGenerationLocal(promptStr, onToken, aiEndpoint, temperature, maxTokens, useProviderDefaults);
         }
     }
@@ -262,10 +309,10 @@
 
         if (shouldDisableStreaming) {
             if (userForcedNonStreaming) {
-                console.log('🔧 Non-streaming mode forced by user setting');
+                window.DebugLog?.safe('legacy.nonStreaming.forced', { provider, model });
             }
             if (isThinkingModel) {
-                console.log('🧠 Thinking model detected:', model, '- will use non-streaming mode');
+                window.DebugLog?.safe('legacy.nonStreaming.thinkingModel', { provider, model });
             }
         }
 
@@ -394,14 +441,14 @@
             }
         }
 
-        // Debug logging for API requests
-        console.log('🚀 API Request to:', provider);
-        console.log('📨 Messages being sent:', JSON.stringify(messages, null, 2));
-        if (useProviderDefaults) {
-            console.log('⚙️ Using provider defaults (temperature and max_tokens not specified)');
-        } else {
-            console.log('⚙️ Temperature:', temp, 'Max Tokens:', maxTok);
-        }
+        window.DebugLog?.safe('legacy.api.request', {
+            provider,
+            model,
+            stream: body?.stream,
+            useProviderDefaults,
+            temperature: useProviderDefaults ? undefined : temp,
+            maxTokens: useProviderDefaults ? undefined : maxTok
+        });
 
         const response = await fetch(url, {
             method: 'POST',
@@ -410,20 +457,22 @@
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ API Error:', response.status, errorText);
-            throw new Error(tr('alerts.apiReturned', { status: response.status, error: errorText }));
+            let errorSummary = response.statusText || 'Provider error';
+            try {
+                await response.text();
+            } catch (e) { /* ignore */ }
+            window.DebugLog?.safe('legacy.api.error', { provider, model, status: response.status, statusText: response.statusText });
+            throw new Error(tr('alerts.apiReturned', { status: response.status, error: errorSummary }));
         }
 
         // Check if response is actually streaming or if it's a complete response
         const contentType = response.headers.get('content-type');
-        console.log('📋 Response Content-Type:', contentType);
+        window.DebugLog?.safe('legacy.api.responseType', { provider, model, contentType });
 
         // Some thinking models don't support streaming and return complete JSON
         if (contentType?.includes('application/json') && !contentType?.includes('text/event-stream')) {
-            console.log('📦 Non-streaming response detected (likely thinking model)');
+            window.DebugLog?.safe('legacy.api.nonStreamingResponse', { provider, model });
             const data = await response.json();
-            console.log('📄 Full response data:', JSON.stringify(data, null, 2));
 
             // Extract content and finish_reason from non-streaming response
             let content = null;
@@ -435,10 +484,7 @@
                 // For thinking models (o1, o3, etc.) that return encrypted reasoning,
                 // check if content is empty but there's a finish_reason
                 if (!content && finishReason) {
-                    console.warn('⚠️ Thinking model returned empty content. This usually means:');
-                    console.warn('   - Max tokens was hit during reasoning phase');
-                    console.warn('   - Model never produced final answer');
-                    console.warn('   - Try increasing max_tokens significantly (10000+) for thinking models');
+                    window.DebugLog?.safe('legacy.api.emptyThinkingContent', { provider, model, finishReason });
                     throw new Error(tr('alerts.thinkingModelEmpty'));
                 }
             } else if (provider === 'anthropic') {
@@ -449,8 +495,7 @@
                 finishReason = data.candidates?.[0]?.finishReason;
             }
 
-            console.log('✅ Extracted content length:', content?.length || 0);
-            console.log('🏁 Finish reason:', finishReason);
+            window.DebugLog?.safe('legacy.api.extractedContent', { provider, model, contentLength: content?.length || 0, finishReason });
 
             if (content) {
                 // Emit content in chunks to simulate streaming
@@ -460,7 +505,7 @@
                     await new Promise(resolve => setTimeout(resolve, 10)); // Small delay for UI
                 }
             } else {
-                console.error('❌ No content found in non-streaming response');
+                window.DebugLog?.safe('legacy.api.noContent', { provider, model, finishReason });
                 throw new Error(tr('alerts.noApiContent'));
             }
             return { finishReason };
@@ -488,19 +533,13 @@
                     let jsonStr = line;
                     if (line.startsWith('data: ')) jsonStr = line.slice(6);
                     if (jsonStr === '[DONE]') {
-                        console.log('🏁 Stream finished with [DONE]');
                         if (!hasReceivedContent) {
-                            console.warn('⚠️ Stream ended without content - possible thinking model without streaming support');
+                            window.DebugLog?.safe('legacy.api.emptyStreamDone', { provider, model });
                         }
                         return { finishReason };
                     }
 
                     const data = JSON.parse(jsonStr);
-
-                    // Debug: Log every chunk to see what we're receiving
-                    if (!hasReceivedContent) {
-                        console.log('🔍 First chunk received:', JSON.stringify(data, null, 2));
-                    }
 
                     // Extract token based on provider format
                     let token = null;
@@ -516,16 +555,11 @@
                         if (delta) {
                             // Try reasoning_content first (for thinking models)
                             token = delta.reasoning_content || delta.content;
-
-                            if (!hasReceivedContent && delta) {
-                                console.log('🔍 Delta object:', JSON.stringify(delta, null, 2));
-                            }
                         }
 
                         // Some models put the complete message in the first chunk
                         if (!token && data.choices?.[0]?.message?.content) {
                             token = data.choices[0].message.content;
-                            console.log('📝 Found complete message in chunk');
                         }
                     } else if (provider === 'anthropic') {
                         if (data.type === 'content_block_delta') {
@@ -544,25 +578,21 @@
                         hasReceivedContent = true;
                         onToken(token);
                     } else if (!hasReceivedContent) {
-                        console.log('⚠️ No token extracted from chunk');
+                        window.DebugLog?.safe('legacy.api.noTokenInInitialChunk', { provider, model });
                     }
                 } catch (e) {
                     // Ignore parse errors for incomplete chunks
-                    console.debug('Parse error (likely incomplete chunk):', e.message);
+                    window.DebugLog?.safe('legacy.api.parseChunkSkipped', { provider, model, message: e.message });
                 }
             }
         }
 
         if (!hasReceivedContent) {
-            console.error('⚠️ No content received from stream');
-            console.error('This usually happens with thinking models that either:');
-            console.error('1. Do not support streaming at all');
-            console.error('2. Return content in a different field structure');
-            console.error('3. Require stream=false in the API request');
+            window.DebugLog?.safe('legacy.api.noStreamingContent', { provider, model, finishReason });
             throw new Error(tr('alerts.noStreamingContent'));
         }
 
-        console.log('🏁 Final finish reason:', finishReason);
+        window.DebugLog?.safe('legacy.api.done', { provider, model, finishReason });
         return { finishReason };
     }
 
@@ -687,6 +717,7 @@
 
     window.Generation = {
         buildPrompt,
+        buildPromptMessages,
         streamGeneration,
         loadPromptHistory,
         generateFromBeat
