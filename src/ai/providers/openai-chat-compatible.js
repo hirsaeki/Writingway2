@@ -35,6 +35,11 @@
         return base;
     }
 
+    function schemaNameFor(schema) {
+        const rawName = schema?.name || schema?.title || 'writingway_response';
+        return String(rawName).toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'writingway_response';
+    }
+
     function buildUrl(settings) {
         switch (settings.provider) {
             case 'openrouter':
@@ -94,22 +99,25 @@
             if (maxTokens) body.max_tokens = maxTokens;
         }
 
-        if (request.responseSchema && request.responseSchema.schema) {
+        const useNativeStructuredOutput = request.responseSchema && request.metadata?.structuredOutputMode !== 'promptOnly';
+        const responseSchema = window.AIStructuredOutput ? window.AIStructuredOutput.resolveSchema(request.responseSchema) : request.responseSchema;
+
+        if (useNativeStructuredOutput && responseSchema && responseSchema.schema) {
             body.response_format = {
                 type: 'json_schema',
                 json_schema: {
-                    name: request.responseSchema.name || 'writingway_response',
-                    strict: request.responseSchema.strict !== false,
-                    schema: request.responseSchema.schema
+                    name: schemaNameFor(responseSchema),
+                    strict: responseSchema.strict !== false,
+                    schema: responseSchema.schema
                 }
             };
-        } else if (request.responseSchema && request.responseSchema.type === 'object') {
+        } else if (useNativeStructuredOutput && responseSchema && responseSchema.type === 'object') {
             body.response_format = {
                 type: 'json_schema',
                 json_schema: {
-                    name: request.responseSchema.title || 'writingway_response',
+                    name: schemaNameFor(responseSchema),
                     strict: true,
-                    schema: request.responseSchema
+                    schema: responseSchema
                 }
             };
         }
@@ -330,6 +338,7 @@
         _test: {
             buildUrl,
             buildHeaders,
+            schemaNameFor,
             normalizeLmStudioBase,
             normalizeOllamaBase,
             normalizeNanoGptBase

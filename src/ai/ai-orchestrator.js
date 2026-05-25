@@ -91,14 +91,19 @@
             ));
         }
 
+        if (selected.request.responseSchema && window.AIStructuredOutput) {
+            selected.request = window.AIStructuredOutput.prepareRequest(selected.request, selected.capabilities);
+        }
+
         const runId = makeRunId();
+        const requiresStructured = Boolean(selected.request.responseSchema);
         let outputText = '';
         let outputJson = null;
         let usage = null;
         let finishReason = null;
         let doneEventSeen = false;
 
-        function dispatch(event) {
+        function dispatch(event, options = {}) {
             if (!event || !event.type) return;
             if (event.type === 'text_delta') {
                 outputText += event.text || '';
@@ -111,6 +116,9 @@
                 doneEventSeen = true;
                 finishReason = event.finishReason || finishReason;
                 if (event.outputJson !== undefined) outputJson = event.outputJson;
+                if (requiresStructured && !options.final) {
+                    return;
+                }
             }
 
             if (typeof callbacks.onEvent === 'function') {
@@ -146,6 +154,30 @@
                 finishReason = result.finishReason || finishReason;
             }
 
+            if (requiresStructured) {
+                if (!window.AIStructuredOutput) {
+                    throw new Error(tr('alerts.structuredSupportMissing', null, 'Structured output support is not loaded'));
+                }
+                const repair = callbacks.repairStructuredOutput || selected.request.metadata?.repairStructuredOutput;
+                const rawText = outputText || (result && result.outputJson ? JSON.stringify(result.outputJson) : '');
+                const structured = await window.AIStructuredOutput.processWithRepair(rawText, selected.request.responseSchema, { repair });
+                if (!structured.ok) {
+                    throw window.AIStructuredOutput.structuredErrorFromResult(structured);
+                }
+                outputJson = structured.outputJson;
+                if (structured.repaired) {
+                    outputText = structured.jsonText || JSON.stringify(outputJson);
+                }
+                dispatch(events.structuredResult(outputJson, {
+                    provider: selected.provider,
+                    model: selected.settings.model || selected.request.modelProfile?.model || '',
+                    adapter: selected.adapterId,
+                    repaired: structured.repaired,
+                    repairAttempted: structured.repairAttempted,
+                    schema: structured.schemaLabel
+                }));
+            }
+
             const finalResult = {
                 runId,
                 outputText,
@@ -157,12 +189,12 @@
                 adapter: selected.adapterId
             };
 
-            if (!doneEventSeen) {
+            if (!doneEventSeen || requiresStructured) {
                 dispatch(events.done(finalResult, {
                     provider: selected.provider,
                     model: finalResult.model,
                     adapter: selected.adapterId
-                }));
+                }), { final: true });
             }
 
             return finalResult;

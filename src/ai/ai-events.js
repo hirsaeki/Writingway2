@@ -24,6 +24,10 @@
         return base('tool_call', Object.assign({ toolCall: toolCallData || {} }, data || {}));
     }
 
+    function structuredResult(outputJson, data) {
+        return base('structured_result', Object.assign({ outputJson: outputJson || null }, data || {}));
+    }
+
     function usage(usageData, data) {
         return base('usage', Object.assign({ usage: usageData || {} }, data || {}));
     }
@@ -53,6 +57,7 @@
         textDelta,
         jsonDelta,
         toolCall,
+        structuredResult,
         usage,
         done,
         error
