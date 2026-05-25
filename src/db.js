@@ -444,6 +444,25 @@ db.version(12).stores({
     }
 });
 
+// Plot planning records and AI run metadata (v13).
+db.version(13).stores({
+    projects: 'id, name, created, modified, updatedAt',
+    chapters: 'id, projectId, title, order, created, modified, updatedAt',
+    scenes: 'id, projectId, chapterId, title, order, created, modified, updatedAt',
+    content: 'sceneId, text, wordCount, updatedAt',
+    prompts: 'id, projectId, category, title, created, modified, updatedAt',
+    codex: 'id, projectId, title, created, modified, updatedAt',
+    compendium: 'id, [projectId+category], projectId, category, title, modified, tags, updatedAt',
+    promptHistory: 'id, projectId, sceneId, timestamp, beat, prompt',
+    workshopSessions: 'id, projectId, name, createdAt, updatedAt',
+    beats: 'id, projectId, chapterId, sceneId, scope, order, status, templateId, templateSlotId, modified',
+    beatTemplates: 'id, name, builtIn, modified',
+    plotPlans: 'id, projectId, templateId, status, created, modified, updatedAt',
+    aiRuns: 'id, projectId, task, provider, model, status, created, updatedAt'
+}).upgrade(async tx => {
+    // New tables only. Existing project/scene/beat data is left untouched.
+});
+
 // Expose the global Dexie instance for debugging and console usage
 try { window.db = window.db || db; } catch (e) { /* ignore in non-browser env */ }
 

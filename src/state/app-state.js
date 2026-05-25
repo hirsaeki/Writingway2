@@ -148,6 +148,23 @@ function createAppState() {
         newBeatTemplateName: '',
         newBeatTemplateSlots: '',
 
+        // ========== Plot Planning ==========
+        showPlotPlanningPanel: false,
+        plotPlans: [],
+        currentPlotPlanId: '',
+        currentPlotPlanCreated: null,
+        plotPlanTemplateId: '',
+        plotPlanName: '',
+        plotPlanStatus: 'draft',
+        plotPlanPremise: '',
+        plotPlanGenre: '',
+        plotPlanTargetLength: '',
+        plotPlanTone: '',
+        plotPlanMedium: 'novel',
+        plotPlanCards: [],
+        newPlotPlanCardTitle: '',
+        newPlotPlanCardSummary: '',
+
         // ========== Scene Generation Options ==========
         showSceneOptions: false,
         showContextPanel: false,

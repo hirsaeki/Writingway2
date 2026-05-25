@@ -15,7 +15,7 @@ const path = require('path');
         const result = await page.evaluate(async () => {
             await db.delete();
             await db.open();
-            if (db.verno !== 12) throw new Error(`expected Dexie v12, got v${db.verno}`);
+            if (db.verno !== 13) throw new Error(`expected Dexie v13, got v${db.verno}`);
             const project = { id: 'p-beats', name: 'Beats', created: new Date(), modified: new Date() };
             const chapter = { id: 'c-beats', projectId: project.id, title: 'Chapter', order: 0, created: new Date(), modified: new Date() };
             const scene = { id: 's-beats', projectId: project.id, chapterId: chapter.id, title: 'Scene', order: 0, created: new Date(), modified: new Date() };

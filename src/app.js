@@ -2352,6 +2352,73 @@ document.addEventListener('alpine:init', () => {
                 }
             },
 
+            async openPlotPlanningPanel() {
+                return window.PlotPlanning.open(this);
+            },
+
+            closePlotPlanningPanel() {
+                return window.PlotPlanning.close(this);
+            },
+
+            async loadPlotPlans() {
+                return window.PlotPlanning.loadPlans(this);
+            },
+
+            async loadPlotPlan(planId) {
+                return window.PlotPlanning.loadPlan(this, planId);
+            },
+
+            clearPlotPlanDraft() {
+                return window.PlotPlanning.clearDraft(this);
+            },
+
+            async createPlotPlanDraftFromTemplate() {
+                try {
+                    const draft = await window.PlotPlanning.createDraftFromTemplate(this);
+                    if (!draft) alert(this.t('alerts.plotPlanDraftFailed'));
+                    return draft;
+                } catch (error) {
+                    alert(error.message || error);
+                }
+            },
+
+            addPlotPlanCard() {
+                return window.PlotPlanning.addCard(this);
+            },
+
+            removePlotPlanCard(cardId) {
+                return window.PlotPlanning.removeCard(this, cardId);
+            },
+
+            async savePlotPlan() {
+                try {
+                    const plan = await window.PlotPlanning.savePlan(this);
+                    alert(this.t('alerts.plotPlanSaved'));
+                    return plan;
+                } catch (error) {
+                    alert(error.message || error);
+                }
+            },
+
+            async deletePlotPlan(planId) {
+                if (!confirm(this.t('alerts.plotPlanDeleteConfirm'))) return;
+                return window.PlotPlanning.deletePlan(this, planId);
+            },
+
+            async saveSelectedPlotPlanCardsAsBeats() {
+                try {
+                    const rows = await window.PlotPlanning.saveSelectedAsBeats(this);
+                    if (rows.length === 0) {
+                        alert(this.t('alerts.plotPlanNoSelectedCards'));
+                    } else {
+                        alert(this.t('alerts.plotPlanConverted', { count: rows.length }));
+                    }
+                    return rows;
+                } catch (error) {
+                    alert(error.message || error);
+                }
+            },
+
             async openBackupSettings() {
                 this.showBackupSettings = true;
             },

@@ -38,6 +38,7 @@
     <script defer src="src/modules/github-backup.js"></script>
     <script defer src="src/modules/data-management.js"></script>
     <script defer src="src/modules/beats.js"></script>
+    <script defer src="src/modules/plot-planning.js"></script>
     <script defer src="src/modules/tab-sync.js"></script>
     <script defer src="src/template-loader.js"></script>
     <script defer src="src/workshop.js"></script>
@@ -265,6 +266,7 @@
                                 <button @click.stop="openCompendium(); mainMenuOpen=false">📚 <span x-text="t('sidebar.compendium')"></span></button>
                                 <button @click.stop="showWorkshopChat = true; mainMenuOpen=false">💬 <span x-text="t('sidebar.workshopChat')"></span></button>
                                 <button @click.stop="openBeatsPanel(); mainMenuOpen=false">🧭 <span x-text="t('sidebar.beats')"></span></button>
+                                <button @click.stop="openPlotPlanningPanel(); mainMenuOpen=false">🗺️ <span x-text="t('sidebar.plotPlanning')"></span></button>
                                 <button @click.stop="showAISettings = true; mainMenuOpen=false">⚙️ <span x-text="t('sidebar.aiSettings')"></span></button>
                                 <button @click.stop="showPromptsPanel = true; mainMenuOpen=false">📝 <span x-text="t('sidebar.managePrompts')"></span></button>
                                 <button @click.stop="openDataManagement(); mainMenuOpen=false">🗂️ <span x-text="t('sidebar.dataManagement')"></span></button>
@@ -1732,6 +1734,139 @@
                         </div>
                     </template>
                     <p x-show="beats.length === 0" style="color:var(--text-secondary);font-size:13px;" x-text="t('beats.empty')"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Plot Planning Panel -->
+        <div class="slide-panel-right" :class="{ 'open': showPlotPlanningPanel }" x-cloak
+            style="width:min(780px, 94vw);">
+            <div class="slide-panel-header">
+                <h3 style="margin:0;">🗺️ <span x-text="t('plotPlanning.title')"></span></h3>
+                <button class="btn btn-secondary" @click="closePlotPlanningPanel()" x-text="t('common.close')"></button>
+            </div>
+            <div class="slide-panel-body" style="padding:20px;">
+                <p x-show="!currentProject" style="color:var(--text-secondary);font-size:13px;margin:0;"
+                    x-text="t('alerts.noProjectSelected')"></p>
+
+                <div x-show="currentProject" style="display:grid;grid-template-columns:minmax(180px, 240px) 1fr;gap:16px;align-items:start;">
+                    <aside style="border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--bg-secondary);">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+                            <h4 style="margin:0;" x-text="t('plotPlanning.plans')"></h4>
+                            <button class="btn btn-secondary" @click="clearPlotPlanDraft()" x-text="t('plotPlanning.newDraft')"></button>
+                        </div>
+                        <div style="display:grid;gap:8px;">
+                            <template x-for="plan in plotPlans" :key="plan.id">
+                                <button class="btn btn-secondary" @click="loadPlotPlan(plan.id)"
+                                    :style="currentPlotPlanId === plan.id ? 'text-align:left;border-color:var(--accent);background:rgba(74,158,255,0.12);' : 'text-align:left;'">
+                                    <span style="display:block;font-weight:600;overflow-wrap:anywhere;" x-text="plan.name || t('plotPlanning.untitled')"></span>
+                                    <span style="display:block;font-size:12px;color:var(--text-secondary);margin-top:4px;">
+                                        <span x-text="t(`plotPlanning.status_${plan.status}`)"></span>
+                                        <span> · </span>
+                                        <span x-text="t('plotPlanning.cardCount', { count: plan.beats.length })"></span>
+                                    </span>
+                                </button>
+                            </template>
+                            <p x-show="plotPlans.length === 0" style="color:var(--text-secondary);font-size:13px;margin:0;"
+                                x-text="t('plotPlanning.noPlans')"></p>
+                        </div>
+                    </aside>
+
+                    <section style="display:grid;gap:12px;min-width:0;">
+                        <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg-secondary);">
+                            <h4 style="margin:0 0 12px 0;" x-text="t('plotPlanning.metadata')"></h4>
+                            <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px;">
+                                <select x-model="plotPlanTemplateId">
+                                    <option value="" x-text="t('beats.chooseTemplate')"></option>
+                                    <template x-for="template in beatTemplates" :key="template.id">
+                                        <option :value="template.id" x-text="template.name"></option>
+                                    </template>
+                                </select>
+                                <button class="btn btn-secondary" @click="createPlotPlanDraftFromTemplate()"
+                                    :disabled="!currentProject || !plotPlanTemplateId"
+                                    x-text="t('plotPlanning.createDraft')"></button>
+                            </div>
+                            <input x-model="plotPlanName" :placeholder="t('plotPlanning.namePlaceholder')"
+                                style="width:100%;padding:10px;margin-bottom:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);">
+                            <textarea x-model="plotPlanPremise" :placeholder="t('plotPlanning.premisePlaceholder')" rows="3"
+                                style="width:100%;padding:10px;margin-bottom:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"></textarea>
+                            <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:8px;margin-bottom:8px;">
+                                <input x-model="plotPlanGenre" :placeholder="t('plotPlanning.genre')"
+                                    style="padding:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);">
+                                <input x-model="plotPlanTargetLength" :placeholder="t('plotPlanning.targetLength')"
+                                    style="padding:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);">
+                                <input x-model="plotPlanTone" :placeholder="t('plotPlanning.tone')"
+                                    style="padding:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);">
+                                <select x-model="plotPlanMedium">
+                                    <option value="novel" x-text="t('plotPlanning.mediumNovel')"></option>
+                                    <option value="screenplay" x-text="t('plotPlanning.mediumScreenplay')"></option>
+                                    <option value="shortStory" x-text="t('plotPlanning.mediumShortStory')"></option>
+                                    <option value="manga" x-text="t('plotPlanning.mediumManga')"></option>
+                                    <option value="game" x-text="t('plotPlanning.mediumGame')"></option>
+                                    <option value="general" x-text="t('plotPlanning.mediumGeneral')"></option>
+                                </select>
+                            </div>
+                            <select x-model="plotPlanStatus" style="width:100%;">
+                                <option value="draft" x-text="t('plotPlanning.status_draft')"></option>
+                                <option value="reviewed" x-text="t('plotPlanning.status_reviewed')"></option>
+                                <option value="accepted" x-text="t('plotPlanning.status_accepted')"></option>
+                                <option value="archived" x-text="t('plotPlanning.status_archived')"></option>
+                            </select>
+                        </div>
+
+                        <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg-secondary);">
+                            <h4 style="margin:0 0 12px 0;" x-text="t('plotPlanning.addCard')"></h4>
+                            <input x-model="newPlotPlanCardTitle" :placeholder="t('plotPlanning.cardTitlePlaceholder')"
+                                style="width:100%;padding:10px;margin-bottom:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);">
+                            <textarea x-model="newPlotPlanCardSummary" :placeholder="t('plotPlanning.cardSummaryPlaceholder')" rows="3"
+                                style="width:100%;padding:10px;margin-bottom:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"></textarea>
+                            <button class="btn btn-secondary" @click="addPlotPlanCard()"
+                                :disabled="!newPlotPlanCardTitle.trim() || !newPlotPlanCardSummary.trim()"
+                                x-text="t('common.add')"></button>
+                        </div>
+
+                        <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg-secondary);">
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px;">
+                                <h4 style="margin:0;" x-text="t('plotPlanning.cards')"></h4>
+                                <span style="font-size:12px;color:var(--text-secondary);"
+                                    x-text="t('plotPlanning.cardCount', { count: plotPlanCards.length })"></span>
+                            </div>
+                            <div style="display:grid;gap:10px;">
+                                <template x-for="card in plotPlanCards" :key="card.id">
+                                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--bg-primary);">
+                                        <div style="display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;margin-bottom:8px;">
+                                            <input type="checkbox" x-model="card.selected" :title="t('plotPlanning.selected')">
+                                            <input x-model="card.title" :placeholder="t('plotPlanning.cardTitlePlaceholder')"
+                                                style="min-width:0;padding:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);">
+                                            <button class="btn btn-secondary" @click="removePlotPlanCard(card.id)"
+                                                :title="t('plotPlanning.removeCard')">×</button>
+                                        </div>
+                                        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;overflow-wrap:anywhere;">
+                                            <span x-text="t('plotPlanning.slot')"></span>
+                                            <span>: </span>
+                                            <span x-text="card.slotTitle"></span>
+                                        </div>
+                                        <textarea x-model="card.summary" :placeholder="t('plotPlanning.cardSummaryPlaceholder')" rows="3"
+                                            style="width:100%;padding:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"></textarea>
+                                    </div>
+                                </template>
+                                <p x-show="plotPlanCards.length === 0" style="color:var(--text-secondary);font-size:13px;margin:0;"
+                                    x-text="t('plotPlanning.noCards')"></p>
+                            </div>
+                        </div>
+
+                        <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+                            <button class="btn btn-secondary" @click="deletePlotPlan(currentPlotPlanId)"
+                                x-show="currentPlotPlanId"
+                                x-text="t('plotPlanning.deletePlan')"></button>
+                            <button class="btn btn-secondary" @click="saveSelectedPlotPlanCardsAsBeats()"
+                                :disabled="!currentProject || !plotPlanName.trim() || !plotPlanPremise.trim() || !plotPlanTemplateId || plotPlanCards.length === 0"
+                                x-text="t('plotPlanning.convertSelected')"></button>
+                            <button class="btn btn-primary" @click="savePlotPlan()"
+                                :disabled="!currentProject || !plotPlanName.trim() || !plotPlanPremise.trim() || !plotPlanTemplateId || plotPlanCards.length === 0"
+                                x-text="t('plotPlanning.savePlan')"></button>
+                        </div>
+                    </section>
                 </div>
             </div>
         </div>

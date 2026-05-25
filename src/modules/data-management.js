@@ -13,7 +13,9 @@
         'compendium',
         'workshopSessions',
         'beats',
-        'beatTemplates'
+        'beatTemplates',
+        'plotPlans',
+        'aiRuns'
     ];
 
     const tr = (app, key, params) => app && typeof app.t === 'function' ? app.t(key, params) : key;
@@ -71,8 +73,7 @@
 
     async function tableToArray(name) {
         if (!db[name]) return [];
-        const rows = await db[name].toArray();
-        return name === 'beatTemplates' ? normalizeBeatTemplates(rows) : rows;
+        return rowsForExport(name, await db[name].toArray());
     }
 
     function normalizeBeatTemplates(rows) {
@@ -81,9 +82,30 @@
         return (rows || []).map(row => service.normalizeTemplate(row));
     }
 
+    function normalizePlotPlans(rows) {
+        const service = window.PlotPlanning;
+        if (!service || typeof service.normalizePlotPlan !== 'function') return rows || [];
+        return (rows || []).map(row => service.normalizePlotPlan(row));
+    }
+
+    function normalizeAiRuns(rows) {
+        const service = window.PlotPlanning;
+        if (!service || typeof service.normalizeAiRun !== 'function') return rows || [];
+        return (rows || []).map(row => service.normalizeAiRun(row));
+    }
+
+    function rowsForExport(tableName, rows) {
+        if (tableName === 'beatTemplates') return normalizeBeatTemplates(rows);
+        if (tableName === 'plotPlans') return normalizePlotPlans(rows);
+        if (tableName === 'aiRuns') return normalizeAiRuns(rows);
+        return rows || [];
+    }
+
     function rowsForImport(tableName, rows) {
         if (tableName === 'beatTemplates') return normalizeBeatTemplates(rows);
-        return rows;
+        if (tableName === 'plotPlans') return normalizePlotPlans(rows);
+        if (tableName === 'aiRuns') return normalizeAiRuns(rows);
+        return rows || [];
     }
 
     async function collectAllData() {
@@ -112,10 +134,11 @@
             promptHistory: db.promptHistory ? await db.promptHistory.where('projectId').equals(projectId).toArray() : [],
             codex: db.codex ? await db.codex.where('projectId').equals(projectId).toArray() : [],
             compendium: db.compendium ? await db.compendium.where('projectId').equals(projectId).toArray() : [],
-            workshopSessions: db.workshopSessions ? await db.workshopSessions.where('projectId').equals(projectId).toArray() : []
-            ,
+            workshopSessions: db.workshopSessions ? await db.workshopSessions.where('projectId').equals(projectId).toArray() : [],
             beats: db.beats ? await db.beats.where('projectId').equals(projectId).toArray() : [],
-            beatTemplates: db.beatTemplates ? normalizeBeatTemplates(await db.beatTemplates.toArray()) : []
+            beatTemplates: db.beatTemplates ? normalizeBeatTemplates(await db.beatTemplates.toArray()) : [],
+            plotPlans: db.plotPlans ? normalizePlotPlans(await db.plotPlans.where('projectId').equals(projectId).toArray()) : [],
+            aiRuns: db.aiRuns ? normalizeAiRuns(await db.aiRuns.where('projectId').equals(projectId).toArray()) : []
         };
     }
 
@@ -149,6 +172,15 @@
         const newProjectId = newId('proj');
         const chapterMap = new Map();
         const sceneMap = new Map();
+        const plotPlanMap = new Map();
+        const aiRunMap = new Map();
+
+        for (const plan of (data.plotPlans || [])) {
+            if (plan && plan.id) plotPlanMap.set(plan.id, newId('plot'));
+        }
+        for (const run of (data.aiRuns || [])) {
+            if (run && run.id) aiRunMap.set(run.id, newId('airun'));
+        }
 
         const project = {
             ...originalProject,
@@ -215,18 +247,37 @@
                 })),
                 codex: (data.codex || []).map(row => remapProjectRow(row, 'codex')),
                 compendium: (data.compendium || []).map(row => remapProjectRow(row, 'comp')),
-                workshopSessions: (data.workshopSessions || []).map(row => remapProjectRow(row, 'workshop'))
-                ,
+                workshopSessions: (data.workshopSessions || []).map(row => remapProjectRow(row, 'workshop')),
                 beats: (data.beats || []).map(row => ({
                     ...row,
                     id: newId('beat'),
                     projectId: newProjectId,
                     chapterId: chapterMap.get(row.chapterId) || row.chapterId || '',
                     sceneId: sceneMap.get(row.sceneId) || row.sceneId || '',
+                    plotPlanId: plotPlanMap.get(row.plotPlanId) || row.plotPlanId || '',
                     modified: new Date(),
                     updatedAt: Date.now()
                 })),
-                beatTemplates: normalizeBeatTemplates(data.beatTemplates || [])
+                beatTemplates: normalizeBeatTemplates(data.beatTemplates || []),
+                plotPlans: normalizePlotPlans((data.plotPlans || []).map(row => ({
+                    ...row,
+                    id: plotPlanMap.get(row.id) || newId('plot'),
+                    projectId: newProjectId,
+                    aiRunId: aiRunMap.get(row.aiRunId) || row.aiRunId || '',
+                    source: row.source || 'imported',
+                    created: row.created || new Date(),
+                    modified: new Date(),
+                    updatedAt: Date.now()
+                }))),
+                aiRuns: normalizeAiRuns((data.aiRuns || []).map(row => ({
+                    ...row,
+                    id: aiRunMap.get(row.id) || newId('airun'),
+                    projectId: newProjectId,
+                    sceneId: sceneMap.get(row.sceneId) || row.sceneId || '',
+                    plotPlanId: plotPlanMap.get(row.plotPlanId) || row.plotPlanId || '',
+                    created: row.created || new Date(),
+                    updatedAt: Date.now()
+                })))
             }
         };
     }
@@ -347,7 +398,11 @@
             makeEnvelope,
             assertEnvelope,
             remapProjectData,
-            normalizeBeatTemplates
+            replaceAllData,
+            addProjectData,
+            normalizeBeatTemplates,
+            normalizePlotPlans,
+            normalizeAiRuns
         }
     };
 
