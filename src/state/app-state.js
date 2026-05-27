@@ -153,9 +153,11 @@ function createAppState() {
         plotPlans: [],
         currentPlotPlanId: '',
         currentPlotPlanCreated: null,
+        currentPlotPlanAiRunId: '',
         plotPlanTemplateId: '',
         plotPlanName: '',
         plotPlanStatus: 'draft',
+        plotPlanSource: 'user',
         plotPlanPremise: '',
         plotPlanGenre: '',
         plotPlanTargetLength: '',
@@ -164,6 +166,9 @@ function createAppState() {
         plotPlanCards: [],
         newPlotPlanCardTitle: '',
         newPlotPlanCardSummary: '',
+        plotPlanIsGenerating: false,
+        plotPlanGenerationError: '',
+        plotPlanLastAiRunId: '',
 
         // ========== Scene Generation Options ==========
         showSceneOptions: false,

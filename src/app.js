@@ -2382,6 +2382,16 @@ document.addEventListener('alpine:init', () => {
                 }
             },
 
+            async generatePlotPlanFromTemplate() {
+                try {
+                    const plan = await window.PlotPlanning.generatePlotPlan(this);
+                    alert(this.t('alerts.plotPlanGenerated'));
+                    return plan;
+                } catch (error) {
+                    alert(this.t('alerts.plotPlanGenerationFailed', { error: error.message || error }));
+                }
+            },
+
             addPlotPlanCard() {
                 return window.PlotPlanning.addCard(this);
             },

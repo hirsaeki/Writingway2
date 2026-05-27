@@ -22,6 +22,11 @@
         return value == null ? '' : String(value);
     }
 
+    function truncate(value, max = 240) {
+        const text = asString(value);
+        return text.length > max ? `${text.slice(0, max)}...` : text;
+    }
+
     function sortSlots(slots) {
         return (slots || []).slice().sort((a, b) => {
             const orderA = Number.isFinite(a.order) ? a.order : 0;
@@ -105,8 +110,9 @@
             targetLength: app.plotPlanTargetLength || '',
             tone: app.plotPlanTone || '',
             medium: app.plotPlanMedium || 'novel',
-            source: 'user',
+            source: app.plotPlanSource || 'user',
             beats: app.plotPlanCards || [],
+            aiRunId: app.currentPlotPlanAiRunId || '',
             created: app.currentPlotPlanCreated || undefined
         });
     }
@@ -115,9 +121,11 @@
         const normalized = normalizePlotPlan(plan);
         app.currentPlotPlanId = normalized.id;
         app.currentPlotPlanCreated = normalized.created;
+        app.currentPlotPlanAiRunId = normalized.aiRunId;
         app.plotPlanTemplateId = normalized.templateId;
         app.plotPlanName = normalized.name;
         app.plotPlanStatus = normalized.status;
+        app.plotPlanSource = normalized.source;
         app.plotPlanPremise = normalized.premise;
         app.plotPlanGenre = normalized.genre;
         app.plotPlanTargetLength = normalized.targetLength;
@@ -129,7 +137,9 @@
     function clearDraft(app) {
         app.currentPlotPlanId = '';
         app.currentPlotPlanCreated = null;
+        app.currentPlotPlanAiRunId = '';
         app.plotPlanStatus = 'draft';
+        app.plotPlanSource = 'user';
         app.plotPlanName = '';
         app.plotPlanPremise = '';
         app.plotPlanGenre = '';
@@ -139,6 +149,7 @@
         app.plotPlanCards = [];
         app.newPlotPlanCardTitle = '';
         app.newPlotPlanCardSummary = '';
+        app.plotPlanGenerationError = '';
     }
 
     async function ensureTemplatesLoaded(app) {
@@ -179,9 +190,7 @@
     async function createDraftFromTemplate(app) {
         if (!app.currentProject || !app.plotPlanTemplateId) return null;
         await ensureTemplatesLoaded(app);
-        const templateRow = await db.beatTemplates.get(app.plotPlanTemplateId);
-        const service = window.BeatTemplateService;
-        const template = service ? service.normalizeTemplate(templateRow) : templateRow;
+        const template = await getSelectedTemplate(app);
         if (!template || !Array.isArray(template.slots) || template.slots.length === 0) return null;
         const cards = sortSlots(template.slots).map((slot, index) => normalizeBeatCard({
             id: id('plotbeat'),
@@ -310,6 +319,279 @@
         return rows;
     }
 
+    async function getSelectedTemplate(app) {
+        if (!app.plotPlanTemplateId || !db.beatTemplates) return null;
+        const templateRow = await db.beatTemplates.get(app.plotPlanTemplateId);
+        const service = window.BeatTemplateService;
+        return service ? service.normalizeTemplate(templateRow) : templateRow;
+    }
+
+    function slotForPrompt(slot, index) {
+        return {
+            id: asString(slot.id || `slot-${index + 1}`),
+            title: asString(slot.title || `Slot ${index + 1}`),
+            order: Number.isFinite(slot.order) ? slot.order : index,
+            description: asString(slot.description || ''),
+            purpose: asString(slot.purpose || ''),
+            recommendedPosition: slot.recommendedPosition || null,
+            promptHint: asString(slot.promptHint || ''),
+            requiredInputs: Array.isArray(slot.requiredInputs) ? slot.requiredInputs.map(asString).filter(Boolean) : []
+        };
+    }
+
+    function templateForPrompt(template) {
+        const normalized = window.BeatTemplateService ? window.BeatTemplateService.normalizeTemplate(template) : template;
+        return {
+            id: asString(normalized.id),
+            name: asString(normalized.name),
+            description: asString(normalized.description || ''),
+            medium: MEDIUMS.has(normalized.medium) ? normalized.medium : 'general',
+            tags: Array.isArray(normalized.tags) ? normalized.tags.map(asString).filter(Boolean) : [],
+            slots: sortSlots(normalized.slots || []).map(slotForPrompt)
+        };
+    }
+
+    function buildPlotGenerationMessages(app, template) {
+        const templatePayload = templateForPrompt(template);
+        const userInputs = {
+            projectName: asString(app.currentProject?.name || ''),
+            planName: asString(app.plotPlanName || `${templatePayload.name} Plot`),
+            premise: asString(app.plotPlanPremise || ''),
+            genre: asString(app.plotPlanGenre || ''),
+            targetLength: asString(app.plotPlanTargetLength || ''),
+            tone: asString(app.plotPlanTone || ''),
+            medium: MEDIUMS.has(app.plotPlanMedium) ? app.plotPlanMedium : (templatePayload.medium || 'novel')
+        };
+
+        return [
+            {
+                role: 'system',
+                content: [
+                    'You are a story planning assistant for Writingway.',
+                    'Return a structured JSON plot plan only.',
+                    'Use the provided template slot IDs exactly.',
+                    'Create one concise, editable plot card per template slot unless the user clearly asks otherwise.',
+                    'Do not write prose scenes. Do not include markdown.'
+                ].join('\n')
+            },
+            {
+                role: 'user',
+                content: [
+                    'Generate a draft plot plan from this normalized beat template and user brief.',
+                    '',
+                    'Required output object fields: templateId, name, premise, genre, targetLength, tone, medium, source, beats.',
+                    'Each beat must include: slotId, slotTitle, title, summary. Optional fields: characterArc, conflict, sceneIdeas, openQuestions, tags.',
+                    'Set source to "ai" and status to "draft" if you include status.',
+                    '',
+                    `Template JSON:\n${JSON.stringify(templatePayload, null, 2)}`,
+                    '',
+                    `User inputs JSON:\n${JSON.stringify(userInputs, null, 2)}`
+                ].join('\n')
+            }
+        ];
+    }
+
+    function buildPlotGenerationRequest(app, template, settingsInput) {
+        if (!window.AIContracts || !window.AIStructuredOutput) {
+            throw new Error(tr(app, 'alerts.aiGatewayContractsMissing', null, 'AI Gateway contracts are not loaded'));
+        }
+        const settings = window.AIContracts.normalizeSettings(settingsInput || window.AIContracts.settingsFromApp(app));
+        const templatePayload = templateForPrompt(template);
+        return window.AIContracts.createRequest({
+            task: 'plot.generate',
+            messages: buildPlotGenerationMessages(app, template),
+            context: {
+                projectId: asString(app.currentProject?.id || ''),
+                templateId: templatePayload.id
+            },
+            responseSchema: window.AIStructuredOutput.schemas.plotPlan,
+            stream: false,
+            modelProfile: {
+                provider: settings.provider,
+                model: settings.model
+            },
+            generation: {
+                temperature: typeof app.temperature === 'number' ? app.temperature : settings.temperature,
+                maxOutputTokens: Math.max(Number(settings.maxTokens || app.maxTokens || 0), 1200)
+            },
+            metadata: {
+                source: 'plot-planning-panel',
+                saveRun: true,
+                templateSlotCount: templatePayload.slots.length
+            }
+        });
+    }
+
+    function summarizeRequest(app, template, request) {
+        const templatePayload = templateForPrompt(template);
+        return {
+            hasSchema: Boolean(request.responseSchema),
+            contextKinds: ['template', 'premise', 'plot-controls'],
+            templateSlotCount: templatePayload.slots.length,
+            premiseChars: asString(app.plotPlanPremise || '').length,
+            genreSet: Boolean(app.plotPlanGenre),
+            targetLengthSet: Boolean(app.plotPlanTargetLength),
+            toneSet: Boolean(app.plotPlanTone),
+            medium: app.plotPlanMedium || templatePayload.medium || 'novel'
+        };
+    }
+
+    async function createAiRun(app, template, request, settings) {
+        const row = normalizeAiRun({
+            id: id('airun'),
+            projectId: app.currentProject?.id || '',
+            templateId: template.id || app.plotPlanTemplateId || '',
+            plotPlanId: '',
+            task: 'plot.generate',
+            provider: settings.provider || '',
+            model: settings.model || '',
+            status: 'running',
+            requestSummary: summarizeRequest(app, template, request),
+            responseSummary: {},
+            usage: {},
+            created: new Date(),
+            updatedAt: Date.now()
+        });
+        if (db.aiRuns) await db.aiRuns.put(row);
+        app.plotPlanLastAiRunId = row.id;
+        return row;
+    }
+
+    async function updateAiRun(aiRunId, patch) {
+        if (!aiRunId || !db.aiRuns) return;
+        await db.aiRuns.update(aiRunId, {
+            ...patch,
+            updatedAt: Date.now()
+        });
+    }
+
+    function normalizeGeneratedPlotPlan(output, app, template, aiRunId) {
+        const rawPlan = output && typeof output === 'object' ? output : {};
+        const normalizedTemplate = templateForPrompt(template);
+        return normalizePlotPlan({
+            ...rawPlan,
+            id: id('plot'),
+            projectId: app.currentProject?.id || '',
+            templateId: normalizedTemplate.id,
+            name: asString(rawPlan.name || app.plotPlanName || `${normalizedTemplate.name} Plot`).trim(),
+            status: 'draft',
+            premise: asString(rawPlan.premise || app.plotPlanPremise || '').trim(),
+            genre: asString(rawPlan.genre || app.plotPlanGenre || ''),
+            targetLength: asString(rawPlan.targetLength || app.plotPlanTargetLength || ''),
+            tone: asString(rawPlan.tone || app.plotPlanTone || ''),
+            medium: MEDIUMS.has(rawPlan.medium) ? rawPlan.medium : (MEDIUMS.has(app.plotPlanMedium) ? app.plotPlanMedium : (normalizedTemplate.medium || 'novel')),
+            source: 'ai',
+            beats: Array.isArray(rawPlan.beats) ? rawPlan.beats : [],
+            aiRunId,
+            created: new Date(),
+            modified: new Date(),
+            updatedAt: Date.now()
+        });
+    }
+
+    function validationSummary(validation) {
+        return (validation.errors || []).map(error => `${error.path}: ${error.message}`).join('\n');
+    }
+
+    async function generatePlotPlan(app, options = {}) {
+        if (!app.currentProject) {
+            throw new Error(tr(app, 'alerts.noProjectSelected', null, 'No project selected.'));
+        }
+        if (!app.plotPlanTemplateId) {
+            throw new Error(tr(app, 'alerts.plotPlanTemplateRequired', null, 'Choose a template first.'));
+        }
+        if (!asString(app.plotPlanPremise).trim()) {
+            throw new Error(tr(app, 'alerts.plotPlanPremiseRequired', null, 'Enter a premise before generating a plot plan.'));
+        }
+        if (!window.AIOrchestrator || !window.AIContracts || !window.AIStructuredOutput) {
+            throw new Error(tr(app, 'alerts.aiGatewayContractsMissing', null, 'AI Gateway contracts are not loaded'));
+        }
+
+        app.plotPlanIsGenerating = true;
+        app.plotPlanGenerationError = '';
+
+        let aiRun = null;
+        try {
+            await ensureTemplatesLoaded(app);
+            const template = await getSelectedTemplate(app);
+            if (!template || !Array.isArray(template.slots) || template.slots.length === 0) {
+                throw new Error(tr(app, 'alerts.plotPlanDraftFailed', null, 'Could not create a draft from the selected template.'));
+            }
+
+            const settings = window.AIContracts.normalizeSettings(options.settings || window.AIContracts.settingsFromApp(app));
+            const request = buildPlotGenerationRequest(app, template, settings);
+            aiRun = await createAiRun(app, template, request, settings);
+            const result = await window.AIOrchestrator.run(request, settings, options.callbacks || {});
+            let outputJson = result && result.outputJson;
+
+            if (!outputJson) {
+                const parsed = window.AIStructuredOutput.validateText(result?.outputText || '', window.AIStructuredOutput.schemas.plotPlan);
+                if (!parsed.ok) throw window.AIStructuredOutput.structuredErrorFromResult(parsed);
+                outputJson = parsed.outputJson;
+            } else {
+                const validation = window.AIStructuredOutput.validateJson(outputJson, window.AIStructuredOutput.schemas.plotPlan);
+                if (!validation.ok) {
+                    throw window.AIStructuredOutput.structuredErrorFromResult({
+                        rawText: JSON.stringify(outputJson),
+                        parseError: null,
+                        validationErrors: validation.errors,
+                        errors: validation.errors,
+                        schemaLabel: validation.schemaLabel,
+                        repairAttempted: false,
+                        repairError: null
+                    });
+                }
+            }
+
+            const plan = normalizeGeneratedPlotPlan(outputJson, app, template, aiRun.id);
+            const planValidation = validatePlotPlan(plan);
+            if (!planValidation.ok) {
+                throw new Error(tr(app, 'alerts.plotPlanInvalid', { error: validationSummary(planValidation) }, `Plot plan is invalid: ${validationSummary(planValidation)}`));
+            }
+
+            await db.plotPlans.put(plan);
+            await updateAiRun(aiRun.id, {
+                status: 'succeeded',
+                plotPlanId: plan.id,
+                responseSummary: {
+                    structured: true,
+                    beatCount: plan.beats.length,
+                    outputChars: asString(result?.outputText || JSON.stringify(outputJson)).length,
+                    validationErrors: [],
+                    repaired: Boolean(result?.repaired)
+                },
+                usage: result?.usage || {}
+            });
+            writeStateFromPlan(app, plan);
+            await loadPlans(app);
+            return plan;
+        } catch (error) {
+            const message = error && error.message ? error.message : String(error);
+            app.plotPlanGenerationError = message;
+            if (aiRun) {
+                await updateAiRun(aiRun.id, {
+                    status: 'failed',
+                    responseSummary: {
+                        structured: true,
+                        errorCode: truncate(error?.code || 'plot_generation_failed', 120),
+                        errorMessage: truncate(message, 400),
+                        validationErrors: Array.isArray(error?.validationErrors)
+                            ? error.validationErrors.map(validationError => ({
+                                path: validationError.path || '$',
+                                message: truncate(validationError.message || validationError.code || 'invalid', 240),
+                                code: validationError.code || 'schema_invalid'
+                            }))
+                            : []
+                    },
+                    usage: {}
+                });
+            }
+            throw error;
+        } finally {
+            app.plotPlanIsGenerating = false;
+        }
+    }
+
     function normalizeAiRun(row, options = {}) {
         const input = row && typeof row === 'object' ? row : {};
         return {
@@ -343,6 +625,7 @@
         savePlan,
         deletePlan,
         saveSelectedAsBeats,
+        generatePlotPlan,
         normalizePlotPlan,
         normalizeBeatCard,
         normalizeAiRun,
@@ -351,7 +634,12 @@
             id,
             planFromState,
             writeStateFromPlan,
-            sortSlots
+            sortSlots,
+            templateForPrompt,
+            buildPlotGenerationMessages,
+            buildPlotGenerationRequest,
+            normalizeGeneratedPlotPlan,
+            summarizeRequest
         }
     };
 })();

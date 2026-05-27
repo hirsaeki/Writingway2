@@ -43,9 +43,11 @@ const path = require('path');
                 plotPlans: [],
                 currentPlotPlanId: '',
                 currentPlotPlanCreated: null,
+                currentPlotPlanAiRunId: '',
                 plotPlanTemplateId: '',
                 plotPlanName: '',
                 plotPlanStatus: 'draft',
+                plotPlanSource: 'user',
                 plotPlanPremise: '',
                 plotPlanGenre: '',
                 plotPlanTargetLength: '',
@@ -54,6 +56,18 @@ const path = require('path');
                 plotPlanCards: [],
                 newPlotPlanCardTitle: '',
                 newPlotPlanCardSummary: '',
+                plotPlanIsGenerating: false,
+                plotPlanGenerationError: '',
+                plotPlanLastAiRunId: '',
+                aiMode: 'api',
+                aiProvider: 'openai',
+                aiApiKey: 'sk-secret-plot-test',
+                aiModel: 'gpt-test',
+                aiEndpoint: '',
+                temperature: 0.4,
+                maxTokens: 300,
+                useProviderDefaults: false,
+                forceNonStreaming: false,
                 t(key, params, fallback) {
                     return fallback || key;
                 }
@@ -99,6 +113,116 @@ const path = require('path');
                 throw new Error('plot plan did not load back into UI state');
             }
 
+            const originalRun = window.AIOrchestrator.run;
+            const fullBs2 = await db.beatTemplates.get('preset-save-the-cat-bs2-v2');
+            const fullBs2Slots = window.BeatTemplateService.normalizeTemplate(fullBs2).slots;
+            const generatedBeats = fullBs2Slots.map(slot => ({
+                slotId: slot.id,
+                slotTitle: slot.title,
+                title: `${slot.title} generated`,
+                summary: `Generated summary for ${slot.title}.`,
+                characterArc: `Arc for ${slot.title}.`,
+                conflict: `Conflict for ${slot.title}.`,
+                sceneIdeas: [`Scene for ${slot.title}`],
+                openQuestions: [],
+                tags: ['generated']
+            }));
+            let capturedRequest = null;
+            let capturedSettings = null;
+            window.AIOrchestrator.run = async (request, settings) => {
+                capturedRequest = request;
+                capturedSettings = settings;
+                return {
+                    runId: 'mock-run-success',
+                    outputJson: {
+                        templateId: 'preset-save-the-cat-bs2-v2',
+                        name: 'Generated City Plan',
+                        premise: app.plotPlanPremise,
+                        genre: app.plotPlanGenre,
+                        targetLength: app.plotPlanTargetLength,
+                        tone: app.plotPlanTone,
+                        medium: app.plotPlanMedium,
+                        source: 'ai',
+                        status: 'draft',
+                        beats: generatedBeats
+                    },
+                    outputText: JSON.stringify({ beats: generatedBeats }),
+                    usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+                    provider: 'openai',
+                    model: 'gpt-test'
+                };
+            };
+
+            app.plotPlanName = '';
+            app.plotPlanPremise = 'A cartographer must redraw a city before it erases itself.';
+            app.plotPlanGenre = 'fantasy';
+            app.plotPlanTargetLength = '90000 words';
+            app.plotPlanTone = 'tense';
+            app.plotPlanTemplateId = 'preset-save-the-cat-bs2-v2';
+            const generated = await window.PlotPlanning.generatePlotPlan(app);
+            if (!capturedRequest || capturedRequest.task !== 'plot.generate') {
+                throw new Error('plot generation did not build a plot.generate AIRequest');
+            }
+            if (!capturedRequest.responseSchema || capturedRequest.responseSchema.$id !== window.AIStructuredOutput.schemas.plotPlan.$id) {
+                throw new Error('plot generation did not request plot-plan structured output');
+            }
+            const requestText = JSON.stringify(capturedRequest.messages);
+            if (!requestText.includes('opening-image') || !requestText.includes('final-image') || !requestText.includes('90000 words')) {
+                throw new Error('plot generation request did not include normalized template slots and user inputs');
+            }
+            if (!capturedSettings || capturedSettings.apiKey !== app.aiApiKey || capturedSettings.provider !== 'openai') {
+                throw new Error('plot generation did not pass current provider settings to the gateway');
+            }
+            if (!generated || generated.status !== 'draft' || generated.source !== 'ai' || generated.beats.length !== 15) {
+                throw new Error('generated plot plan was not normalized as a draft AI plan');
+            }
+            if (app.plotPlanSource !== 'ai' || app.plotPlanCards.length !== 15 || app.plotPlanCards[0].slotId !== 'opening-image') {
+                throw new Error('generated plot plan was not shown as editable cards');
+            }
+            if (await db.beats.where('projectId').equals(project.id).count() !== 0) {
+                throw new Error('generated plot cards should not be saved as beats automatically');
+            }
+            const generatedRun = await db.aiRuns.get(generated.aiRunId);
+            if (!generatedRun || generatedRun.status !== 'succeeded' || generatedRun.plotPlanId !== generated.id || generatedRun.task !== 'plot.generate') {
+                throw new Error('successful AI plot run metadata was not stored');
+            }
+            const generatedRunText = JSON.stringify(generatedRun);
+            if (generatedRunText.includes(app.aiApiKey) || generatedRunText.includes(app.plotPlanPremise) || generatedRunText.includes('Template JSON')) {
+                throw new Error('AI run metadata should not store secrets or full prompts');
+            }
+            if (generatedRun.requestSummary.templateSlotCount !== 15 || generatedRun.responseSummary.beatCount !== 15) {
+                throw new Error('AI run summaries should capture non-sensitive request/response metadata');
+            }
+
+            const planCountBeforeInvalid = await db.plotPlans.count();
+            window.AIOrchestrator.run = async () => ({
+                runId: 'mock-run-invalid',
+                outputJson: {
+                    templateId: 'preset-save-the-cat-bs2-v2',
+                    name: 'Broken Generated Plan',
+                    premise: 'Broken premise',
+                    beats: [{ slotId: 'opening-image', slotTitle: 'Opening Image', title: 'Missing summary' }]
+                },
+                outputText: '{"broken":true}',
+                usage: {}
+            });
+            let invalidAiRejected = false;
+            app.plotPlanPremise = 'Broken premise that must not be stored in aiRuns';
+            try {
+                await window.PlotPlanning.generatePlotPlan(app);
+            } catch (error) {
+                invalidAiRejected = /schema|summary|required|invalid/i.test(error.message || String(error));
+            }
+            if (!invalidAiRejected) throw new Error('schema-invalid AI output should be rejected');
+            if (await db.plotPlans.count() !== planCountBeforeInvalid) {
+                throw new Error('schema-invalid AI output should not save a plot plan');
+            }
+            const failedRuns = (await db.aiRuns.where('projectId').equals(project.id).toArray()).filter(row => row.status === 'failed');
+            if (failedRuns.length !== 1 || JSON.stringify(failedRuns[0]).includes('Broken premise that must not be stored')) {
+                throw new Error('failed AI run metadata should be stored without raw output or full prompt text');
+            }
+            window.AIOrchestrator.run = originalRun;
+
             let invalidRejected = false;
             const invalidApp = {
                 ...app,
@@ -117,6 +241,7 @@ const path = require('path');
             }
             if (!invalidRejected) throw new Error('invalid plot plan should not be saved');
 
+            await window.PlotPlanning.loadPlan(app, saved.id);
             app.plotPlanCards = app.plotPlanCards.map((card, index) => ({ ...card, selected: index < 2 }));
             const converted = await window.PlotPlanning.saveSelectedAsBeats(app);
             if (converted.length !== 2) throw new Error('selected plot cards were not converted to beats');
@@ -142,7 +267,7 @@ const path = require('path');
 
             const dm = window.DataManagement._test;
             const projectData = await dm.collectProjectData(project.id);
-            if (projectData.plotPlans.length !== 1 || projectData.aiRuns.length !== 1 || projectData.beats.length !== 2) {
+            if (projectData.plotPlans.length !== 2 || projectData.aiRuns.length !== 3 || projectData.beats.length !== 2) {
                 throw new Error('project export missed plot planning data');
             }
 
@@ -150,13 +275,16 @@ const path = require('path');
             const importedPlans = await db.plotPlans.where('projectId').equals(importedProjectId).toArray();
             const importedRuns = await db.aiRuns.where('projectId').equals(importedProjectId).toArray();
             const importedBeats = await db.beats.where('projectId').equals(importedProjectId).toArray();
-            if (importedPlans.length !== 1 || importedRuns.length !== 1 || importedBeats.length !== 2) {
+            if (importedPlans.length !== 2 || importedRuns.length !== 3 || importedBeats.length !== 2) {
                 throw new Error('project import did not persist plot planning data');
             }
-            if (importedPlans[0].id === saved.id || importedRuns[0].plotPlanId !== importedPlans[0].id) {
+            const importedPlanIds = new Set(importedPlans.map(plan => plan.id));
+            const importedRunPlanIds = importedRuns.map(run => run.plotPlanId).filter(Boolean);
+            if (importedPlans.some(plan => plan.id === saved.id) || importedRunPlanIds.some(planId => !importedPlanIds.has(planId))) {
                 throw new Error('project import did not remap plot plan references');
             }
-            if (importedBeats.some(beat => beat.plotPlanId !== importedPlans[0].id)) {
+            const importedManualPlan = importedPlans.find(plan => plan.name === 'City Map Plan');
+            if (!importedManualPlan || importedBeats.some(beat => beat.plotPlanId !== importedManualPlan.id)) {
                 throw new Error('project import did not remap converted beat references');
             }
 
@@ -166,7 +294,8 @@ const path = require('path');
                 savedPlans: await db.plotPlans.count(),
                 convertedBeats: convertedRows.length,
                 importedPlans: importedPlans.length,
-                importedRuns: importedRuns.length
+                importedRuns: importedRuns.length,
+                generatedRunStatus: generatedRun.status
             };
         });
 
