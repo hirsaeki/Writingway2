@@ -2352,6 +2352,40 @@ document.addEventListener('alpine:init', () => {
                 }
             },
 
+            async openTemplateCustomization() {
+                try {
+                    const template = await window.Beats.openTemplateCustomization(this);
+                    if (!template) alert(this.t('alerts.templateCustomizationTemplateRequired'));
+                    return template;
+                } catch (error) {
+                    alert(error.message || error);
+                }
+            },
+
+            closeTemplateCustomization() {
+                return window.Beats.closeTemplateCustomization(this);
+            },
+
+            async generateTemplateCustomization() {
+                try {
+                    const template = await window.Beats.generateTemplateCustomization(this);
+                    alert(this.t('alerts.templateCustomizationGenerated'));
+                    return template;
+                } catch (error) {
+                    alert(this.t('alerts.templateCustomizationFailed', { error: error.message || error }));
+                }
+            },
+
+            async saveCustomizedBeatTemplate() {
+                try {
+                    const template = await window.Beats.saveCustomizedTemplate(this);
+                    alert(this.t('alerts.templateCustomizationSaved'));
+                    return template;
+                } catch (error) {
+                    alert(error.message || error);
+                }
+            },
+
             async openPlotPlanningPanel() {
                 return window.PlotPlanning.open(this);
             },

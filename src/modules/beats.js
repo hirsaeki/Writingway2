@@ -3,6 +3,7 @@
     const TEMPLATE_FORMAT = 'writingway2.beat-template';
     const TEMPLATE_VERSION = 2;
     const TemplateService = window.BeatTemplateService;
+    const MEDIUMS = new Set(['novel', 'screenplay', 'shortStory', 'manga', 'game', 'general']);
 
     function id(prefix) {
         return Date.now().toString() + '-' + prefix + '-' + Math.random().toString(36).slice(2, 8);
@@ -27,6 +28,46 @@
             const orderB = Number.isFinite(b.order) ? b.order : 0;
             return orderA - orderB;
         });
+    }
+
+    function asString(value) {
+        return value == null ? '' : String(value);
+    }
+
+    function truncate(value, max = 240) {
+        const text = asString(value);
+        return text.length > max ? `${text.slice(0, max)}...` : text;
+    }
+
+    function tr(app, key, params, fallback) {
+        if (app && typeof app.t === 'function') return app.t(key, params, fallback);
+        return window.t ? window.t(key, params, fallback) : (fallback || key);
+    }
+
+    function slotForPrompt(slot, index) {
+        return {
+            id: asString(slot.id || `slot-${index + 1}`),
+            title: asString(slot.title || `Slot ${index + 1}`),
+            order: Number.isFinite(slot.order) ? slot.order : index,
+            description: asString(slot.description || ''),
+            purpose: asString(slot.purpose || ''),
+            recommendedPosition: slot.recommendedPosition || null,
+            promptHint: asString(slot.promptHint || ''),
+            requiredInputs: Array.isArray(slot.requiredInputs) ? slot.requiredInputs.map(asString).filter(Boolean) : [],
+            examples: Array.isArray(slot.examples) ? slot.examples.map(asString).filter(Boolean) : []
+        };
+    }
+
+    function templateForPrompt(template) {
+        const normalized = normalizeTemplate(template);
+        return {
+            id: asString(normalized.id),
+            name: asString(normalized.name),
+            description: asString(normalized.description || ''),
+            medium: MEDIUMS.has(normalized.medium) ? normalized.medium : 'general',
+            tags: Array.isArray(normalized.tags) ? normalized.tags.map(asString).filter(Boolean) : [],
+            slots: sortSlots(normalized.slots || []).map(slotForPrompt)
+        };
     }
 
     function needsNormalization(template) {
@@ -258,6 +299,386 @@
         return template;
     }
 
+    async function getTemplateById(templateId) {
+        if (!templateId || !db.beatTemplates) return null;
+        const row = await db.beatTemplates.get(templateId);
+        return row ? normalizeTemplate(row) : null;
+    }
+
+    async function openTemplateCustomization(app) {
+        await loadTemplates(app);
+        const templateId = app.selectedBeatTemplateId || app.templateCustomizationBaseId || '';
+        if (!templateId) return null;
+        const template = await getTemplateById(templateId);
+        if (!template) return null;
+        app.templateCustomizationBaseId = template.id;
+        app.templateCustomizationInstruction = '';
+        app.templateCustomizationIsGenerating = false;
+        app.templateCustomizationError = '';
+        app.templateCustomizationDraft = null;
+        app.templateCustomizationChangeSummary = [];
+        app.templateCustomizationAiRunId = '';
+        app.showTemplateCustomizationModal = true;
+        return template;
+    }
+
+    function closeTemplateCustomization(app) {
+        app.showTemplateCustomizationModal = false;
+    }
+
+    function buildTemplateCustomizationMessages(app, baseTemplate) {
+        const templatePayload = templateForPrompt(baseTemplate);
+        const instruction = asString(app.templateCustomizationInstruction).trim();
+        const outputRules = {
+            format: TEMPLATE_FORMAT,
+            version: TEMPLATE_VERSION,
+            template: {
+                version: TEMPLATE_VERSION,
+                source: 'aiCustomized',
+                builtIn: false,
+                baseTemplateId: templatePayload.id,
+                customization: {
+                    instruction: 'Summarize or restate the user customization instruction.',
+                    changeSummary: ['Short human-readable change summary item.']
+                },
+                slots: [{
+                    id: 'stable-slot-id',
+                    title: 'Slot title',
+                    order: 0,
+                    description: 'What this slot represents.',
+                    purpose: 'Why this beat exists.'
+                }]
+            }
+        };
+        return [
+            {
+                role: 'system',
+                content: [
+                    'You are a story-structure template designer for Writingway.',
+                    'Return a structured JSON beat-template export envelope only.',
+                    'Preserve stable slot IDs when a slot keeps the same structural role.',
+                    'Use concise descriptions, purposes, and prompt hints for each slot.',
+                    'Do not write prose scenes. Do not include markdown.'
+                ].join('\n')
+            },
+            {
+                role: 'user',
+                content: [
+                    'Customize this normalized beat template according to the user instruction.',
+                    '',
+                    'Required output shape:',
+                    JSON.stringify(outputRules, null, 2),
+                    '',
+                    'The output must include template.customization.changeSummary as short review bullets.',
+                    'The customized template must be reusable and must not depend on the original template being changed.',
+                    '',
+                    `Base template JSON:\n${JSON.stringify(templatePayload, null, 2)}`,
+                    '',
+                    `User customization instruction:\n${instruction}`
+                ].join('\n')
+            }
+        ];
+    }
+
+    function buildTemplateCustomizationRequest(app, baseTemplate, settingsInput) {
+        if (!window.AIContracts || !window.AIStructuredOutput) {
+            throw new Error(tr(app, 'alerts.aiGatewayContractsMissing', null, 'AI Gateway contracts are not loaded'));
+        }
+        const settings = window.AIContracts.normalizeSettings(settingsInput || window.AIContracts.settingsFromApp(app));
+        const templatePayload = templateForPrompt(baseTemplate);
+        return window.AIContracts.createRequest({
+            task: 'template.customize',
+            messages: buildTemplateCustomizationMessages(app, baseTemplate),
+            context: {
+                projectId: asString(app.currentProject?.id || ''),
+                templateId: templatePayload.id
+            },
+            responseSchema: window.AIStructuredOutput.schemas.beatTemplateV2,
+            stream: false,
+            modelProfile: {
+                provider: settings.provider,
+                model: settings.model
+            },
+            generation: {
+                temperature: typeof app.temperature === 'number' ? app.temperature : settings.temperature,
+                maxOutputTokens: Math.max(Number(settings.maxTokens || app.maxTokens || 0), 1600)
+            },
+            metadata: {
+                source: 'beat-template-customization-modal',
+                saveRun: true,
+                baseTemplateId: templatePayload.id,
+                baseSlotCount: templatePayload.slots.length,
+                instructionChars: asString(app.templateCustomizationInstruction).trim().length
+            }
+        });
+    }
+
+    function summarizeCustomizationRequest(app, baseTemplate, request) {
+        const templatePayload = templateForPrompt(baseTemplate);
+        return {
+            hasSchema: Boolean(request.responseSchema),
+            contextKinds: ['template', 'customization-instruction'],
+            baseTemplateId: templatePayload.id,
+            baseSlotCount: templatePayload.slots.length,
+            instructionChars: asString(app.templateCustomizationInstruction).trim().length,
+            medium: templatePayload.medium || 'general'
+        };
+    }
+
+    function normalizeAiRun(row, options = {}) {
+        const input = row && typeof row === 'object' ? row : {};
+        return {
+            ...input,
+            id: asString(input.id || options.id || id('airun')),
+            projectId: asString(input.projectId || options.projectId || ''),
+            sceneId: asString(input.sceneId || ''),
+            templateId: asString(input.templateId || ''),
+            plotPlanId: asString(input.plotPlanId || ''),
+            task: asString(input.task || ''),
+            provider: asString(input.provider || ''),
+            model: asString(input.model || ''),
+            status: asString(input.status || 'unknown'),
+            requestSummary: input.requestSummary && typeof input.requestSummary === 'object' ? input.requestSummary : {},
+            responseSummary: input.responseSummary && typeof input.responseSummary === 'object' ? input.responseSummary : {},
+            usage: input.usage && typeof input.usage === 'object' ? input.usage : {},
+            created: input.created || new Date(),
+            updatedAt: input.updatedAt || Date.now()
+        };
+    }
+
+    async function createTemplateCustomizationAiRun(app, baseTemplate, request, settings) {
+        const row = normalizeAiRun({
+            id: id('airun'),
+            projectId: app.currentProject?.id || '',
+            templateId: baseTemplate.id || app.templateCustomizationBaseId || '',
+            plotPlanId: '',
+            task: 'template.customize',
+            provider: settings.provider || '',
+            model: settings.model || '',
+            status: 'running',
+            requestSummary: summarizeCustomizationRequest(app, baseTemplate, request),
+            responseSummary: {},
+            usage: {},
+            created: new Date(),
+            updatedAt: Date.now()
+        });
+        if (db.aiRuns) await db.aiRuns.put(row);
+        app.templateCustomizationAiRunId = row.id;
+        return row;
+    }
+
+    async function updateTemplateCustomizationAiRun(aiRunId, patch) {
+        if (!aiRunId || !db.aiRuns) return;
+        await db.aiRuns.update(aiRunId, {
+            ...patch,
+            updatedAt: Date.now()
+        });
+    }
+
+    function validateTemplateEnvelope(envelope) {
+        if (!window.AIStructuredOutput) {
+            throw new Error(tr(null, 'alerts.structuredSupportMissing', null, 'Structured output support is not loaded'));
+        }
+        const validation = window.AIStructuredOutput.validateJson(envelope, window.AIStructuredOutput.schemas.beatTemplateV2);
+        if (!validation.ok) {
+            throw window.AIStructuredOutput.structuredErrorFromResult({
+                rawText: JSON.stringify(envelope),
+                parseError: null,
+                validationErrors: validation.errors,
+                errors: validation.errors,
+                schemaLabel: validation.schemaLabel,
+                repairAttempted: false,
+                repairError: null
+            });
+        }
+        return validation;
+    }
+
+    function changeSummaryFromTemplate(baseTemplate, customizedTemplate) {
+        const base = templateForPrompt(baseTemplate);
+        const customized = templateForPrompt(customizedTemplate);
+        const summary = [];
+        if (base.name !== customized.name) {
+            summary.push(`Renamed "${base.name}" to "${customized.name}".`);
+        }
+        if (base.slots.length !== customized.slots.length) {
+            summary.push(`Changed slot count from ${base.slots.length} to ${customized.slots.length}.`);
+        }
+        const baseIds = new Set(base.slots.map(slot => slot.id));
+        const newSlots = customized.slots.filter(slot => !baseIds.has(slot.id));
+        if (newSlots.length > 0) {
+            summary.push(`Added ${newSlots.length} new slot(s): ${newSlots.map(slot => slot.title).join(', ')}.`);
+        }
+        if (summary.length === 0) {
+            summary.push(`Customized ${customized.slots.length} slot(s) from ${base.name}.`);
+        }
+        return summary;
+    }
+
+    function normalizeGeneratedTemplate(outputJson, app, baseTemplate, aiRunId) {
+        const envelope = outputJson && typeof outputJson === 'object' ? outputJson : {};
+        validateTemplateEnvelope(envelope);
+        const rawTemplate = envelope.template || {};
+        const rawCustomization = rawTemplate.customization && typeof rawTemplate.customization === 'object'
+            ? rawTemplate.customization
+            : {};
+        const rawSummary = Array.isArray(rawCustomization.changeSummary)
+            ? rawCustomization.changeSummary.map(asString).map(item => item.trim()).filter(Boolean)
+            : [];
+        const now = new Date();
+        let customized = normalizeTemplate({
+            ...rawTemplate,
+            id: id('template'),
+            builtIn: false,
+            source: 'aiCustomized',
+            baseTemplateId: baseTemplate.id || app.templateCustomizationBaseId || '',
+            customization: {
+                ...rawCustomization,
+                instruction: asString(app.templateCustomizationInstruction).trim(),
+                changeSummary: rawSummary,
+                aiRunId
+            },
+            created: now,
+            modified: now,
+            updatedAt: Date.now()
+        });
+        const changeSummary = rawSummary.length > 0 ? rawSummary : changeSummaryFromTemplate(baseTemplate, customized);
+        customized = normalizeTemplate({
+            ...customized,
+            customization: {
+                ...(customized.customization || {}),
+                instruction: asString(app.templateCustomizationInstruction).trim(),
+                changeSummary,
+                aiRunId
+            }
+        });
+        validateTemplateEnvelope(makeTemplateEnvelope(customized));
+        return { template: customized, changeSummary };
+    }
+
+    async function generateTemplateCustomization(app, options = {}) {
+        if (!app.selectedBeatTemplateId && !app.templateCustomizationBaseId) {
+            throw new Error(tr(app, 'alerts.templateCustomizationTemplateRequired', null, 'Choose a template first.'));
+        }
+        if (!asString(app.templateCustomizationInstruction).trim()) {
+            throw new Error(tr(app, 'alerts.templateCustomizationInstructionRequired', null, 'Enter customization instructions first.'));
+        }
+        if (!window.AIOrchestrator || !window.AIContracts || !window.AIStructuredOutput) {
+            throw new Error(tr(app, 'alerts.aiGatewayContractsMissing', null, 'AI Gateway contracts are not loaded'));
+        }
+
+        app.templateCustomizationIsGenerating = true;
+        app.templateCustomizationError = '';
+        app.templateCustomizationDraft = null;
+        app.templateCustomizationChangeSummary = [];
+
+        let aiRun = null;
+        try {
+            const baseTemplate = await getTemplateById(app.templateCustomizationBaseId || app.selectedBeatTemplateId);
+            if (!baseTemplate || !Array.isArray(baseTemplate.slots) || baseTemplate.slots.length === 0) {
+                throw new Error(tr(app, 'alerts.templateCustomizationTemplateRequired', null, 'Choose a template first.'));
+            }
+            app.templateCustomizationBaseId = baseTemplate.id;
+            const settings = window.AIContracts.normalizeSettings(options.settings || window.AIContracts.settingsFromApp(app));
+            const request = buildTemplateCustomizationRequest(app, baseTemplate, settings);
+            aiRun = await createTemplateCustomizationAiRun(app, baseTemplate, request, settings);
+            const result = await window.AIOrchestrator.run(request, settings, options.callbacks || {});
+            let outputJson = result && result.outputJson;
+
+            if (!outputJson) {
+                const parsed = window.AIStructuredOutput.validateText(result?.outputText || '', window.AIStructuredOutput.schemas.beatTemplateV2);
+                if (!parsed.ok) throw window.AIStructuredOutput.structuredErrorFromResult(parsed);
+                outputJson = parsed.outputJson;
+            } else {
+                validateTemplateEnvelope(outputJson);
+            }
+
+            const normalized = normalizeGeneratedTemplate(outputJson, app, baseTemplate, aiRun.id);
+            app.templateCustomizationDraft = normalized.template;
+            app.templateCustomizationChangeSummary = normalized.changeSummary;
+
+            await updateTemplateCustomizationAiRun(aiRun.id, {
+                status: 'succeeded',
+                responseSummary: {
+                    structured: true,
+                    slotCount: normalized.template.slots.length,
+                    changeCount: normalized.changeSummary.length,
+                    outputChars: asString(result?.outputText || JSON.stringify(outputJson)).length,
+                    validationErrors: [],
+                    repaired: Boolean(result?.repaired)
+                },
+                usage: result?.usage || {}
+            });
+            return normalized.template;
+        } catch (error) {
+            const message = error && error.message ? error.message : String(error);
+            app.templateCustomizationError = message;
+            if (aiRun) {
+                await updateTemplateCustomizationAiRun(aiRun.id, {
+                    status: 'failed',
+                    responseSummary: {
+                        structured: true,
+                        errorCode: truncate(error?.code || 'template_customization_failed', 120),
+                        errorMessage: truncate(message, 400),
+                        validationErrors: Array.isArray(error?.validationErrors)
+                            ? error.validationErrors.map(validationError => ({
+                                path: validationError.path || '$',
+                                message: truncate(validationError.message || validationError.code || 'invalid', 240),
+                                code: validationError.code || 'schema_invalid'
+                            }))
+                            : []
+                    },
+                    usage: {}
+                });
+            }
+            throw error;
+        } finally {
+            app.templateCustomizationIsGenerating = false;
+        }
+    }
+
+    async function saveCustomizedTemplate(app) {
+        if (!db.beatTemplates) throw new Error('beatTemplates table is unavailable.');
+        if (!app.templateCustomizationDraft) {
+            throw new Error(tr(app, 'alerts.templateCustomizationNoDraft', null, 'Generate a customized template before saving.'));
+        }
+        const draft = app.templateCustomizationDraft;
+        const baseTemplateId = draft.baseTemplateId || app.templateCustomizationBaseId || app.selectedBeatTemplateId || '';
+        const templateId = draft.id && draft.id !== baseTemplateId ? draft.id : id('template');
+        const customized = normalizeTemplate({
+            ...draft,
+            id: templateId,
+            builtIn: false,
+            source: 'aiCustomized',
+            baseTemplateId,
+            customization: {
+                ...(draft.customization || {}),
+                instruction: asString(app.templateCustomizationInstruction || draft.customization?.instruction || '').trim(),
+                changeSummary: Array.isArray(app.templateCustomizationChangeSummary)
+                    ? app.templateCustomizationChangeSummary.map(asString).filter(Boolean)
+                    : [],
+                aiRunId: app.templateCustomizationAiRunId || draft.customization?.aiRunId || ''
+            },
+            created: draft.created || new Date(),
+            modified: new Date(),
+            updatedAt: Date.now()
+        });
+        validateTemplateEnvelope(makeTemplateEnvelope(customized));
+        await db.beatTemplates.put(customized);
+        await updateTemplateCustomizationAiRun(customized.customization.aiRunId, {
+            responseSummary: {
+                savedTemplateId: customized.id,
+                slotCount: customized.slots.length,
+                changeCount: customized.customization.changeSummary.length
+            }
+        });
+        app.templateCustomizationDraft = customized;
+        app.selectedBeatTemplateId = customized.id;
+        app.showTemplateCustomizationModal = false;
+        await loadTemplates(app);
+        return customized;
+    }
+
     async function getBeatReferencesForScene(sceneId) {
         if (!sceneId || !db.beats) return [];
         return db.beats.where('sceneId').equals(sceneId).toArray();
@@ -277,6 +698,10 @@
         createTemplate,
         exportTemplate,
         importTemplate,
+        openTemplateCustomization,
+        closeTemplateCustomization,
+        generateTemplateCustomization,
+        saveCustomizedTemplate,
         getBeatReferencesForScene,
         _test: {
             TEMPLATE_FORMAT,
@@ -286,7 +711,13 @@
             slugifySlotId: TemplateService.slugifySlotId,
             makeTemplateEnvelope,
             parseTemplateEnvelope,
-            sortSlots
+            sortSlots,
+            templateForPrompt,
+            buildTemplateCustomizationMessages,
+            buildTemplateCustomizationRequest,
+            summarizeCustomizationRequest,
+            normalizeGeneratedTemplate,
+            normalizeAiRun
         }
     };
 })();

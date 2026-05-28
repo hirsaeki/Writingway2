@@ -1675,6 +1675,9 @@
                     </div>
                     <div style="display:flex;gap:8px;margin-top:8px;">
                         <button class="btn btn-secondary" @click="exportSelectedBeatTemplate()" :disabled="!selectedBeatTemplateId" x-text="t('beats.exportTemplate')"></button>
+                        <button class="btn btn-secondary" @click="openTemplateCustomization()"
+                            :disabled="!selectedBeatTemplateId || templateCustomizationIsGenerating"
+                            x-text="t('beats.customizeTemplate')"></button>
                         <button class="btn btn-secondary" @click="document.getElementById('importBeatTemplateInput').click()" x-text="t('beats.importTemplate')"></button>
                         <input type="file" id="importBeatTemplateInput" accept=".json,application/json"
                             @change="importBeatTemplate($event); $event.target.value = null" style="display:none;">
@@ -1734,6 +1737,82 @@
                         </div>
                     </template>
                     <p x-show="beats.length === 0" style="color:var(--text-secondary);font-size:13px;" x-text="t('beats.empty')"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Template Customization Modal -->
+        <div x-show="showTemplateCustomizationModal" class="modal-backdrop" @click.self="closeTemplateCustomization()" x-cloak
+            style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:10020;">
+            <div class="modal-content"
+                style="background:var(--bg-secondary);padding:24px;border-radius:12px;max-width:780px;width:92%;max-height:86vh;overflow-y:auto;">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;">
+                    <div style="min-width:0;">
+                        <h3 style="margin:0 0 6px 0;" x-text="t('templateCustomization.title')"></h3>
+                        <div style="font-size:13px;color:var(--text-secondary);overflow-wrap:anywhere;">
+                            <span x-text="t('templateCustomization.baseTemplate')"></span>
+                            <span>: </span>
+                            <span x-text="(beatTemplates.find(template => template.id === templateCustomizationBaseId) || {}).name || ''"></span>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary" @click="closeTemplateCustomization()" x-text="t('common.close')"></button>
+                </div>
+
+                <label style="display:block;margin-bottom:8px;font-size:13px;color:var(--text-secondary);"
+                    x-text="t('templateCustomization.instruction')"></label>
+                <textarea x-model="templateCustomizationInstruction" rows="5"
+                    :placeholder="t('templateCustomization.instructionPlaceholder')"
+                    style="width:100%;padding:10px;margin-bottom:12px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"></textarea>
+
+                <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-bottom:14px;">
+                    <button class="btn btn-secondary" @click="closeTemplateCustomization()" x-text="t('common.cancel')"></button>
+                    <button class="btn btn-primary" @click="generateTemplateCustomization()"
+                        :disabled="!templateCustomizationInstruction.trim() || templateCustomizationIsGenerating"
+                        x-text="templateCustomizationIsGenerating ? t('templateCustomization.generating') : t('templateCustomization.generate')"></button>
+                </div>
+
+                <p x-show="templateCustomizationError"
+                    style="margin:0 0 12px 0;color:var(--danger,#ef4444);font-size:13px;white-space:pre-wrap;"
+                    x-text="t('templateCustomization.invalidAiOutput') + ': ' + templateCustomizationError"></p>
+
+                <div x-show="templateCustomizationDraft" style="display:grid;gap:12px;">
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg-primary);">
+                        <h4 style="margin:0 0 10px 0;" x-text="t('templateCustomization.changeSummary')"></h4>
+                        <ul style="margin:0 0 0 18px;color:var(--text-secondary);font-size:13px;line-height:1.5;">
+                            <template x-for="(item, index) in templateCustomizationChangeSummary" :key="index">
+                                <li x-text="item"></li>
+                            </template>
+                        </ul>
+                    </div>
+
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg-primary);">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+                            <h4 style="margin:0;" x-text="t('templateCustomization.slotList')"></h4>
+                            <span style="font-size:12px;color:var(--text-secondary);"
+                                x-text="t('templateCustomization.slotCount', { count: ((templateCustomizationDraft && templateCustomizationDraft.slots) || []).length })"></span>
+                        </div>
+                        <div style="display:grid;gap:8px;">
+                            <template x-for="slot in ((templateCustomizationDraft && templateCustomizationDraft.slots) || [])" :key="slot.id">
+                                <div style="border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg-secondary);">
+                                    <div style="display:flex;gap:8px;align-items:baseline;justify-content:space-between;">
+                                        <strong style="overflow-wrap:anywhere;" x-text="slot.title"></strong>
+                                        <span style="font-size:12px;color:var(--text-secondary);" x-text="slot.id"></span>
+                                    </div>
+                                    <p style="margin:6px 0 0 0;color:var(--text-secondary);font-size:13px;line-height:1.5;white-space:pre-wrap;"
+                                        x-text="slot.description || slot.purpose"></p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+                        <button class="btn btn-secondary" @click="generateTemplateCustomization()"
+                            :disabled="!templateCustomizationInstruction.trim() || templateCustomizationIsGenerating"
+                            x-text="t('templateCustomization.regenerate')"></button>
+                        <button class="btn btn-primary" @click="saveCustomizedBeatTemplate()"
+                            :disabled="!templateCustomizationDraft"
+                            x-text="t('templateCustomization.saveCustom')"></button>
+                    </div>
                 </div>
             </div>
         </div>

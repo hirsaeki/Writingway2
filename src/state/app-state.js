@@ -147,6 +147,14 @@ function createAppState() {
         selectedBeatTemplateId: '',
         newBeatTemplateName: '',
         newBeatTemplateSlots: '',
+        showTemplateCustomizationModal: false,
+        templateCustomizationBaseId: '',
+        templateCustomizationInstruction: '',
+        templateCustomizationIsGenerating: false,
+        templateCustomizationError: '',
+        templateCustomizationDraft: null,
+        templateCustomizationChangeSummary: [],
+        templateCustomizationAiRunId: '',
 
         // ========== Plot Planning ==========
         showPlotPlanningPanel: false,
