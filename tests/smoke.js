@@ -28,6 +28,17 @@ const path = require('path');
             dexie: typeof window.Dexie,
             jszip: typeof window.JSZip,
             platformAdapter: window.PlatformAdapter && window.PlatformAdapter.kind,
+            tauriDetection: (() => {
+                const previous = window.__TAURI_IPC__;
+                window.__TAURI_IPC__ = function () {};
+                const detected = window.PlatformAdapter && window.PlatformAdapter.kind;
+                if (previous === undefined) {
+                    delete window.__TAURI_IPC__;
+                } else {
+                    window.__TAURI_IPC__ = previous;
+                }
+                return detected;
+            })(),
             externalScripts: Array.from(document.scripts)
                 .map(script => script.getAttribute('src') || '')
                 .filter(src => /^https?:\/\//i.test(src))
@@ -39,6 +50,11 @@ const path = require('path');
         }
         if (dependencyStatus.platformAdapter !== 'browser') {
             console.error('ERROR: browser PlatformAdapter did not load', dependencyStatus);
+            await browser.close();
+            process.exit(2);
+        }
+        if (dependencyStatus.tauriDetection !== 'tauri') {
+            console.error('ERROR: PlatformAdapter Tauri detection did not work', dependencyStatus);
             await browser.close();
             process.exit(2);
         }

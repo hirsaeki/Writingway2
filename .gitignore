@@ -27,3 +27,7 @@ todo.md
 .update/
 # Node modules
 node_modules/
+# Tauri generated frontend/build output
+dist-tauri/
+src-tauri/target/
+src-tauri/gen/

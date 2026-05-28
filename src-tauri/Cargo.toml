@@ -1,0 +1,16 @@
+[package]
+name = "writingway2"
+version = "1.0.0"
+description = "Writingway 2"
+authors = ["Writingway"]
+edition = "2021"
+
+[lib]
+name = "writingway2_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }

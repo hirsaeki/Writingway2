@@ -1,7 +1,11 @@
 // Browser platform adapter. Tauri-specific behavior can replace this object later.
 (function () {
+    function tauriGlobal() {
+        return window.__TAURI__ || window.__TAURI_INTERNALS__ || null;
+    }
+
     function isTauri() {
-        return Boolean(window.__TAURI_INTERNALS__ || window.__TAURI__ || window.__TAURI_IPC__);
+        return Boolean(tauriGlobal() || window.__TAURI_IPC__);
     }
 
     function safeFilename(filename, fallback) {
@@ -63,8 +67,9 @@
     }
 
     async function invoke(command, payload) {
-        if (isTauri() && window.__TAURI__?.core?.invoke) {
-            return window.__TAURI__.core.invoke(command, payload);
+        const tauri = tauriGlobal();
+        if (isTauri() && tauri?.core?.invoke) {
+            return tauri.core.invoke(command, payload);
         }
         throw new Error('Platform invoke is not available in browser mode.');
     }
@@ -75,7 +80,9 @@
 
     if (!window.PlatformAdapter) {
         window.PlatformAdapter = {
-            kind: 'browser',
+            get kind() {
+                return isTauri() ? 'tauri' : 'browser';
+            },
             isTauri,
             downloadBlob,
             downloadJson,
@@ -86,6 +93,7 @@
             invoke,
             openExternal,
             _test: {
+                tauriGlobal,
                 safeFilename
             }
         };
