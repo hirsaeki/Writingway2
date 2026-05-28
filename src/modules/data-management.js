@@ -15,7 +15,9 @@
         'beats',
         'beatTemplates',
         'plotPlans',
-        'aiRuns'
+        'aiRuns',
+        'userPreferences',
+        'tuningEvents'
     ];
 
     const tr = (app, key, params) => app && typeof app.t === 'function' ? app.t(key, params) : key;
@@ -94,10 +96,24 @@
         return (rows || []).map(row => service.normalizeAiRun(row));
     }
 
+    function normalizeUserPreferences(rows) {
+        const service = window.Preferences;
+        if (!service || typeof service.normalizePreference !== 'function') return rows || [];
+        return (rows || []).map(row => service.normalizePreference(row));
+    }
+
+    function normalizeTuningEvents(rows) {
+        const service = window.Preferences;
+        if (!service || typeof service.normalizeTuningEvent !== 'function') return rows || [];
+        return (rows || []).map(row => service.normalizeTuningEvent(row));
+    }
+
     function rowsForExport(tableName, rows) {
         if (tableName === 'beatTemplates') return normalizeBeatTemplates(rows);
         if (tableName === 'plotPlans') return normalizePlotPlans(rows);
         if (tableName === 'aiRuns') return normalizeAiRuns(rows);
+        if (tableName === 'userPreferences') return normalizeUserPreferences(rows);
+        if (tableName === 'tuningEvents') return normalizeTuningEvents(rows);
         return rows || [];
     }
 
@@ -105,6 +121,8 @@
         if (tableName === 'beatTemplates') return normalizeBeatTemplates(rows);
         if (tableName === 'plotPlans') return normalizePlotPlans(rows);
         if (tableName === 'aiRuns') return normalizeAiRuns(rows);
+        if (tableName === 'userPreferences') return normalizeUserPreferences(rows);
+        if (tableName === 'tuningEvents') return normalizeTuningEvents(rows);
         return rows || [];
     }
 
@@ -138,7 +156,9 @@
             beats: db.beats ? await db.beats.where('projectId').equals(projectId).toArray() : [],
             beatTemplates: db.beatTemplates ? normalizeBeatTemplates(await db.beatTemplates.toArray()) : [],
             plotPlans: db.plotPlans ? normalizePlotPlans(await db.plotPlans.where('projectId').equals(projectId).toArray()) : [],
-            aiRuns: db.aiRuns ? normalizeAiRuns(await db.aiRuns.where('projectId').equals(projectId).toArray()) : []
+            aiRuns: db.aiRuns ? normalizeAiRuns(await db.aiRuns.where('projectId').equals(projectId).toArray()) : [],
+            userPreferences: db.userPreferences ? normalizeUserPreferences(await db.userPreferences.where('projectId').equals(projectId).toArray()) : [],
+            tuningEvents: db.tuningEvents ? normalizeTuningEvents(await db.tuningEvents.where('projectId').equals(projectId).toArray()) : []
         };
     }
 
@@ -174,12 +194,16 @@
         const sceneMap = new Map();
         const plotPlanMap = new Map();
         const aiRunMap = new Map();
+        const tuningEventMap = new Map();
 
         for (const plan of (data.plotPlans || [])) {
             if (plan && plan.id) plotPlanMap.set(plan.id, newId('plot'));
         }
         for (const run of (data.aiRuns || [])) {
             if (run && run.id) aiRunMap.set(run.id, newId('airun'));
+        }
+        for (const event of (data.tuningEvents || [])) {
+            if (event && event.id) tuningEventMap.set(event.id, newId('tune'));
         }
 
         const project = {
@@ -275,6 +299,26 @@
                     projectId: newProjectId,
                     sceneId: sceneMap.get(row.sceneId) || row.sceneId || '',
                     plotPlanId: plotPlanMap.get(row.plotPlanId) || row.plotPlanId || '',
+                    created: row.created || new Date(),
+                    updatedAt: Date.now()
+                }))),
+                userPreferences: normalizeUserPreferences((data.userPreferences || []).map(row => ({
+                    ...row,
+                    id: newId('pref'),
+                    scope: 'project',
+                    projectId: newProjectId,
+                    created: row.created || new Date(),
+                    updatedAt: Date.now()
+                }))),
+                tuningEvents: normalizeTuningEvents((data.tuningEvents || []).map(row => ({
+                    ...row,
+                    id: tuningEventMap.get(row.id) || newId('tune'),
+                    projectId: newProjectId,
+                    targetId: row.targetType === 'plotPlan'
+                        ? (plotPlanMap.get(row.targetId) || row.targetId || '')
+                        : (row.targetId || ''),
+                    plotPlanId: plotPlanMap.get(row.plotPlanId) || row.plotPlanId || '',
+                    aiRunId: aiRunMap.get(row.aiRunId) || row.aiRunId || '',
                     created: row.created || new Date(),
                     updatedAt: Date.now()
                 })))
@@ -402,7 +446,9 @@
             addProjectData,
             normalizeBeatTemplates,
             normalizePlotPlans,
-            normalizeAiRuns
+            normalizeAiRuns,
+            normalizeUserPreferences,
+            normalizeTuningEvents
         }
     };
 

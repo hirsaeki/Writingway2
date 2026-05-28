@@ -303,6 +303,8 @@
                 if (db.beats) await db.beats.where('projectId').equals(projectId).delete();
                 if (db.plotPlans) await db.plotPlans.where('projectId').equals(projectId).delete();
                 if (db.aiRuns) await db.aiRuns.where('projectId').equals(projectId).delete();
+                if (db.userPreferences) await db.userPreferences.where('projectId').equals(projectId).delete();
+                if (db.tuningEvents) await db.tuningEvents.where('projectId').equals(projectId).delete();
 
                 // Delete project itself
                 await db.projects.delete(projectId);

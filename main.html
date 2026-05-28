@@ -36,6 +36,7 @@
     <script defer src="src/modules/compendium-manager.js"></script>
     <script defer src="src/modules/ai-settings.js"></script>
     <script defer src="src/modules/github-backup.js"></script>
+    <script defer src="src/modules/preferences.js"></script>
     <script defer src="src/modules/data-management.js"></script>
     <script defer src="src/modules/beats.js"></script>
     <script defer src="src/modules/plot-planning.js"></script>
@@ -269,6 +270,7 @@
                                 <button @click.stop="openPlotPlanningPanel(); mainMenuOpen=false">🗺️ <span x-text="t('sidebar.plotPlanning')"></span></button>
                                 <button @click.stop="showAISettings = true; mainMenuOpen=false">⚙️ <span x-text="t('sidebar.aiSettings')"></span></button>
                                 <button @click.stop="showPromptsPanel = true; mainMenuOpen=false">📝 <span x-text="t('sidebar.managePrompts')"></span></button>
+                                <button @click.stop="openPreferencesPanel(); mainMenuOpen=false">🎚️ <span x-text="t('sidebar.preferences')"></span></button>
                                 <button @click.stop="openDataManagement(); mainMenuOpen=false">🗂️ <span x-text="t('sidebar.dataManagement')"></span></button>
                                 <div style="border-top:1px solid var(--border);margin:6px 0"></div>
                                 <button @click.stop="checkForUpdates(); mainMenuOpen=false"
@@ -1621,6 +1623,93 @@
             </div>
         </div>
 
+        <!-- Preference Tuning Panel -->
+        <div class="slide-panel-right" :class="{ 'open': showPreferencesPanel }" x-cloak
+            style="width:min(620px, 94vw);">
+            <div class="slide-panel-header">
+                <h3 style="margin:0;">🎚️ <span x-text="t('preferences.title')"></span></h3>
+                <button class="btn btn-secondary" @click="closePreferencesPanel()" x-text="t('common.close')"></button>
+            </div>
+            <div class="slide-panel-body" style="padding:20px;">
+                <p x-show="!currentProject" style="color:var(--text-secondary);font-size:13px;margin:0;"
+                    x-text="t('alerts.noProjectSelected')"></p>
+
+                <div x-show="currentProject" style="display:grid;gap:14px;">
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg-secondary);">
+                        <h4 style="margin:0 0 12px 0;" x-text="t('preferences.plotGeneration')"></h4>
+                        <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px;"
+                            x-text="t('preferences.beatDensity')"></label>
+                        <select x-model="preferenceBeatDensity" style="width:100%;margin-bottom:10px;">
+                            <option value="concise" x-text="t('preferences.densityConcise')"></option>
+                            <option value="balanced" x-text="t('preferences.densityBalanced')"></option>
+                            <option value="detailed" x-text="t('preferences.densityDetailed')"></option>
+                        </select>
+                        <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px;"
+                            x-text="t('preferences.defaultTone')"></label>
+                        <input x-model="preferenceDefaultTone" :placeholder="t('preferences.defaultTonePlaceholder')"
+                            style="width:100%;padding:10px;margin-bottom:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);">
+                        <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px;"
+                            x-text="t('preferences.plotGuidance')"></label>
+                        <textarea x-model="preferencePlotGuidance" rows="4" :placeholder="t('preferences.plotGuidancePlaceholder')"
+                            style="width:100%;padding:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"></textarea>
+                    </div>
+
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg-secondary);">
+                        <h4 style="margin:0 0 12px 0;" x-text="t('preferences.templateCustomization')"></h4>
+                        <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px;"
+                            x-text="t('preferences.templateDetail')"></label>
+                        <select x-model="preferenceTemplateDetail" style="width:100%;margin-bottom:10px;">
+                            <option value="compact" x-text="t('preferences.detailCompact')"></option>
+                            <option value="balanced" x-text="t('preferences.detailBalanced')"></option>
+                            <option value="expanded" x-text="t('preferences.detailExpanded')"></option>
+                        </select>
+                        <label style="display:block;font-size:13px;color:var(--text-secondary);margin-bottom:6px;"
+                            x-text="t('preferences.templateGuidance')"></label>
+                        <textarea x-model="preferenceTemplateGuidance" rows="4" :placeholder="t('preferences.templateGuidancePlaceholder')"
+                            style="width:100%;padding:10px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);"></textarea>
+                    </div>
+
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg-secondary);">
+                        <h4 style="margin:0 0 12px 0;" x-text="t('preferences.summary')"></h4>
+                        <p x-show="!preferenceSummaryText" style="margin:0;color:var(--text-secondary);font-size:13px;"
+                            x-text="t('preferences.noSummary')"></p>
+                        <pre x-show="preferenceSummaryText"
+                            style="white-space:pre-wrap;margin:0;color:var(--text-secondary);font-size:13px;font-family:inherit;line-height:1.5;"
+                            x-text="preferenceSummaryText"></pre>
+                    </div>
+
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--bg-secondary);">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+                            <h4 style="margin:0;" x-text="t('preferences.reviewHistory')"></h4>
+                            <span style="font-size:12px;color:var(--text-secondary);"
+                                x-text="t('preferences.eventCount', { count: tuningEvents.length })"></span>
+                        </div>
+                        <div style="display:grid;gap:8px;">
+                            <template x-for="event in tuningEvents" :key="event.id">
+                                <div style="border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg-primary);">
+                                    <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">
+                                        <strong x-text="t(`preferences.decision_${event.decision}`)"></strong>
+                                        <span style="font-size:12px;color:var(--text-secondary);" x-text="event.task"></span>
+                                    </div>
+                                    <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;overflow-wrap:anywhere;"
+                                        x-text="(event.summary && (event.summary.title || event.summary.templateId)) || event.targetId"></div>
+                                </div>
+                            </template>
+                            <p x-show="tuningEvents.length === 0" style="margin:0;color:var(--text-secondary);font-size:13px;"
+                                x-text="t('preferences.noEvents')"></p>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+                        <button class="btn btn-secondary" @click="resetPreferenceTuning()"
+                            x-text="t('preferences.reset')"></button>
+                        <button class="btn btn-primary" @click="savePreferenceTuning()" :disabled="preferenceIsSaving"
+                            x-text="preferenceIsSaving ? t('common.saving') : t('preferences.save')"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Story Beats Panel -->
         <div class="slide-panel-right" :class="{ 'open': showBeatsPanel }" x-cloak>
             <div class="slide-panel-header">
@@ -1806,6 +1895,8 @@
                     </div>
 
                     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+                        <button class="btn btn-secondary" @click="rejectTemplateCustomization()"
+                            x-text="t('templateCustomization.reject')"></button>
                         <button class="btn btn-secondary" @click="generateTemplateCustomization()"
                             :disabled="!templateCustomizationInstruction.trim() || templateCustomizationIsGenerating"
                             x-text="t('templateCustomization.regenerate')"></button>
@@ -1947,6 +2038,14 @@
                             <button class="btn btn-secondary" @click="deletePlotPlan(currentPlotPlanId)"
                                 x-show="currentPlotPlanId"
                                 x-text="t('plotPlanning.deletePlan')"></button>
+                            <button class="btn btn-secondary" @click="recordPlotPlanDecision('rejected')"
+                                x-show="plotPlanSource === 'ai'"
+                                :disabled="!currentProject || !plotPlanTemplateId || plotPlanCards.length === 0"
+                                x-text="t('plotPlanning.rejectForTuning')"></button>
+                            <button class="btn btn-secondary" @click="recordPlotPlanDecision('accepted')"
+                                x-show="plotPlanSource === 'ai'"
+                                :disabled="!currentProject || !plotPlanTemplateId || plotPlanCards.length === 0"
+                                x-text="t('plotPlanning.acceptForTuning')"></button>
                             <button class="btn btn-secondary" @click="saveSelectedPlotPlanCardsAsBeats()"
                                 :disabled="!currentProject || !plotPlanName.trim() || !plotPlanPremise.trim() || !plotPlanTemplateId || plotPlanCards.length === 0"
                                 x-text="t('plotPlanning.convertSelected')"></button>

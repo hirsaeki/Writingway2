@@ -70,6 +70,17 @@
         };
     }
 
+    function preferenceSummaryForTask(app, task) {
+        const summary = app && app.preferenceRequestSummary;
+        if (!summary || (summary.task && summary.task !== task)) return null;
+        if (!summary.text && (!summary.explicit || Object.keys(summary.explicit).length === 0) && !summary.learned) return null;
+        return {
+            explicit: summary.explicit || {},
+            learned: summary.learned || {},
+            text: summary.text || ''
+        };
+    }
+
     function needsNormalization(template) {
         if (!template || template.version !== 2 || !Array.isArray(template.slots)) return true;
         return template.slots.some(slot => (
@@ -329,6 +340,7 @@
     function buildTemplateCustomizationMessages(app, baseTemplate) {
         const templatePayload = templateForPrompt(baseTemplate);
         const instruction = asString(app.templateCustomizationInstruction).trim();
+        const preferenceSummary = preferenceSummaryForTask(app, 'template.customize');
         const outputRules = {
             format: TEMPLATE_FORMAT,
             version: TEMPLATE_VERSION,
@@ -350,6 +362,22 @@
                 }]
             }
         };
+        const userContent = [
+            'Customize this normalized beat template according to the user instruction.',
+            '',
+            'Required output shape:',
+            JSON.stringify(outputRules, null, 2),
+            '',
+            'The output must include template.customization.changeSummary as short review bullets.',
+            'The customized template must be reusable and must not depend on the original template being changed.',
+            '',
+            `Base template JSON:\n${JSON.stringify(templatePayload, null, 2)}`,
+            '',
+            `User customization instruction:\n${instruction}`
+        ];
+        if (preferenceSummary) {
+            userContent.push('', `Local preference summary JSON:\n${JSON.stringify(preferenceSummary, null, 2)}`);
+        }
         return [
             {
                 role: 'system',
@@ -363,19 +391,7 @@
             },
             {
                 role: 'user',
-                content: [
-                    'Customize this normalized beat template according to the user instruction.',
-                    '',
-                    'Required output shape:',
-                    JSON.stringify(outputRules, null, 2),
-                    '',
-                    'The output must include template.customization.changeSummary as short review bullets.',
-                    'The customized template must be reusable and must not depend on the original template being changed.',
-                    '',
-                    `Base template JSON:\n${JSON.stringify(templatePayload, null, 2)}`,
-                    '',
-                    `User customization instruction:\n${instruction}`
-                ].join('\n')
+                content: userContent.join('\n')
             }
         ];
     }
@@ -408,7 +424,9 @@
                 saveRun: true,
                 baseTemplateId: templatePayload.id,
                 baseSlotCount: templatePayload.slots.length,
-                instructionChars: asString(app.templateCustomizationInstruction).trim().length
+                instructionChars: asString(app.templateCustomizationInstruction).trim().length,
+                preferenceSummaryChars: asString(preferenceSummaryForTask(app, 'template.customize')?.text || '').length,
+                tuningEventCount: preferenceSummaryForTask(app, 'template.customize')?.learned?.recentEvents?.length || 0
             }
         });
     }
@@ -421,7 +439,9 @@
             baseTemplateId: templatePayload.id,
             baseSlotCount: templatePayload.slots.length,
             instructionChars: asString(app.templateCustomizationInstruction).trim().length,
-            medium: templatePayload.medium || 'general'
+            medium: templatePayload.medium || 'general',
+            preferenceSummaryChars: asString(preferenceSummaryForTask(app, 'template.customize')?.text || '').length,
+            tuningEventCount: preferenceSummaryForTask(app, 'template.customize')?.learned?.recentEvents?.length || 0
         };
     }
 
@@ -580,6 +600,9 @@
             }
             app.templateCustomizationBaseId = baseTemplate.id;
             const settings = window.AIContracts.normalizeSettings(options.settings || window.AIContracts.settingsFromApp(app));
+            if (window.Preferences && typeof window.Preferences.prepareRequestContext === 'function') {
+                await window.Preferences.prepareRequestContext(app, 'template.customize');
+            }
             const request = buildTemplateCustomizationRequest(app, baseTemplate, settings);
             aiRun = await createTemplateCustomizationAiRun(app, baseTemplate, request, settings);
             const result = await window.AIOrchestrator.run(request, settings, options.callbacks || {});
@@ -675,8 +698,23 @@
         app.templateCustomizationDraft = customized;
         app.selectedBeatTemplateId = customized.id;
         app.showTemplateCustomizationModal = false;
+        if (window.Preferences && typeof window.Preferences.trackTemplateDecision === 'function') {
+            await window.Preferences.trackTemplateDecision(app, customized, 'accepted');
+        }
         await loadTemplates(app);
         return customized;
+    }
+
+    async function rejectTemplateCustomization(app) {
+        const draft = app.templateCustomizationDraft;
+        if (draft && window.Preferences && typeof window.Preferences.trackTemplateDecision === 'function') {
+            await window.Preferences.trackTemplateDecision(app, draft, 'rejected');
+        }
+        app.templateCustomizationDraft = null;
+        app.templateCustomizationChangeSummary = [];
+        app.templateCustomizationError = '';
+        app.showTemplateCustomizationModal = false;
+        return draft || null;
     }
 
     async function getBeatReferencesForScene(sceneId) {
@@ -702,6 +740,7 @@
         closeTemplateCustomization,
         generateTemplateCustomization,
         saveCustomizedTemplate,
+        rejectTemplateCustomization,
         getBeatReferencesForScene,
         _test: {
             TEMPLATE_FORMAT,
@@ -717,7 +756,8 @@
             buildTemplateCustomizationRequest,
             summarizeCustomizationRequest,
             normalizeGeneratedTemplate,
-            normalizeAiRun
+            normalizeAiRun,
+            preferenceSummaryForTask
         }
     };
 })();

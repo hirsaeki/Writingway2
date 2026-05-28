@@ -2300,6 +2300,33 @@ document.addEventListener('alpine:init', () => {
                 return window.DataManagement.importProject(this, event);
             },
 
+            async openPreferencesPanel() {
+                return window.Preferences.open(this);
+            },
+
+            closePreferencesPanel() {
+                return window.Preferences.close(this);
+            },
+
+            async savePreferenceTuning() {
+                try {
+                    this.preferenceIsSaving = true;
+                    const rows = await window.Preferences.saveExplicitPreferences(this);
+                    alert(this.t('alerts.preferencesSaved'));
+                    return rows;
+                } catch (error) {
+                    alert(this.t('alerts.preferencesSaveFailed', { error: error.message || error }));
+                } finally {
+                    this.preferenceIsSaving = false;
+                }
+            },
+
+            async resetPreferenceTuning() {
+                if (!confirm(this.t('alerts.preferencesResetConfirm'))) return;
+                await window.Preferences.resetProject(this);
+                alert(this.t('alerts.preferencesReset'));
+            },
+
             async openBeatsPanel() {
                 return window.Beats.open(this);
             },
@@ -2386,6 +2413,16 @@ document.addEventListener('alpine:init', () => {
                 }
             },
 
+            async rejectTemplateCustomization() {
+                try {
+                    const template = await window.Beats.rejectTemplateCustomization(this);
+                    if (template) alert(this.t('alerts.templateCustomizationRejected'));
+                    return template;
+                } catch (error) {
+                    alert(error.message || error);
+                }
+            },
+
             async openPlotPlanningPanel() {
                 return window.PlotPlanning.open(this);
             },
@@ -2458,6 +2495,16 @@ document.addEventListener('alpine:init', () => {
                         alert(this.t('alerts.plotPlanConverted', { count: rows.length }));
                     }
                     return rows;
+                } catch (error) {
+                    alert(error.message || error);
+                }
+            },
+
+            async recordPlotPlanDecision(decision) {
+                try {
+                    const event = await window.PlotPlanning.recordPlotPlanDecision(this, decision);
+                    if (event) alert(this.t(decision === 'accepted' ? 'alerts.plotPlanAcceptedForTuning' : 'alerts.plotPlanRejectedForTuning'));
+                    return event;
                 } catch (error) {
                     alert(error.message || error);
                 }

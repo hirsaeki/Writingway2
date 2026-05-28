@@ -70,6 +70,32 @@ const path = require('path');
                 created: new Date(),
                 updatedAt: Date.now()
             });
+            await db.userPreferences.add({
+                id: 'pref1',
+                scope: 'project',
+                projectId: 'p1',
+                key: 'plot.instructions',
+                value: 'Prefer detailed inner arcs.',
+                source: 'explicit',
+                created: new Date(),
+                updatedAt: Date.now()
+            });
+            await db.tuningEvents.add({
+                id: 'te1',
+                projectId: 'p1',
+                task: 'plot.generate',
+                source: 'plotPlanAccepted',
+                decision: 'accepted',
+                targetType: 'plotPlan',
+                targetId: 'pp1',
+                templateId: 'legacy-template',
+                plotPlanId: 'pp1',
+                aiRunId: 'ar1',
+                summary: { title: 'Manual Plan', beatCount: 1 },
+                inference: { key: 'plot.reviewedPlan', confidence: 0.7 },
+                created: new Date(),
+                updatedAt: Date.now()
+            });
             await db.beats.add({
                 id: 'b1',
                 projectId: 'p1',
@@ -89,7 +115,7 @@ const path = require('path');
             });
 
             const all = await dm.collectAllData();
-            if (all.projects.length !== 2 || all.scenes.length !== 1 || all.content.length !== 1 || all.plotPlans.length !== 1 || all.aiRuns.length !== 1) {
+            if (all.projects.length !== 2 || all.scenes.length !== 1 || all.content.length !== 1 || all.plotPlans.length !== 1 || all.aiRuns.length !== 1 || all.userPreferences.length !== 1 || all.tuningEvents.length !== 1) {
                 throw new Error('all-data export missed table rows');
             }
             if (!all.beatTemplates[0] || all.beatTemplates[0].version !== 2 || all.beatTemplates[0].slots[0].id !== 'start') {
@@ -111,8 +137,8 @@ const path = require('path');
             if (!project.beatTemplates[0] || project.beatTemplates[0].version !== 2) {
                 throw new Error('project export should include normalized beat templates');
             }
-            if (project.plotPlans.length !== 1 || project.aiRuns.length !== 1 || project.beats[0].plotPlanId !== 'pp1') {
-                throw new Error('project export missed plot planning rows');
+            if (project.plotPlans.length !== 1 || project.aiRuns.length !== 1 || project.beats[0].plotPlanId !== 'pp1' || project.userPreferences.length !== 1 || project.tuningEvents.length !== 1) {
+                throw new Error('project export missed plot planning or preference rows');
             }
 
             const remapped = dm.remapProjectData(project).data;
@@ -140,16 +166,27 @@ const path = require('path');
             if (remapped.aiRuns[0].sceneId !== remapped.scenes[0].id) {
                 throw new Error('project import should remap AI run scene references');
             }
+            if (remapped.userPreferences[0].id === 'pref1' || remapped.userPreferences[0].projectId !== remapped.projects[0].id || remapped.userPreferences[0].key !== 'plot.instructions') {
+                throw new Error('project import should remap user preference ids and projectId');
+            }
+            if (remapped.tuningEvents[0].id === 'te1' || remapped.tuningEvents[0].projectId !== remapped.projects[0].id || remapped.tuningEvents[0].plotPlanId !== remapped.plotPlans[0].id || remapped.tuningEvents[0].targetId !== remapped.plotPlans[0].id) {
+                throw new Error('project import should remap tuning event ids and plot plan references');
+            }
 
             const importedProjectId = await dm.addProjectData(project);
             const importedPlans = await db.plotPlans.where('projectId').equals(importedProjectId).toArray();
             const importedRuns = await db.aiRuns.where('projectId').equals(importedProjectId).toArray();
             const importedBeats = await db.beats.where('projectId').equals(importedProjectId).toArray();
-            if (importedPlans.length !== 1 || importedRuns.length !== 1 || importedBeats.length !== 1) {
-                throw new Error('project import should persist plot plans, AI runs, and converted beats');
+            const importedPrefs = await db.userPreferences.where('projectId').equals(importedProjectId).toArray();
+            const importedEvents = await db.tuningEvents.where('projectId').equals(importedProjectId).toArray();
+            if (importedPlans.length !== 1 || importedRuns.length !== 1 || importedBeats.length !== 1 || importedPrefs.length !== 1 || importedEvents.length !== 1) {
+                throw new Error('project import should persist plot plans, AI runs, converted beats, and preferences');
             }
             if (importedRuns[0].plotPlanId !== importedPlans[0].id || importedBeats[0].plotPlanId !== importedPlans[0].id) {
                 throw new Error('persisted project import should keep remapped plot plan references');
+            }
+            if (importedEvents[0].plotPlanId !== importedPlans[0].id || importedEvents[0].targetId !== importedPlans[0].id) {
+                throw new Error('persisted project import should keep remapped tuning event references');
             }
 
             let rejected = false;

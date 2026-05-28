@@ -313,10 +313,40 @@
             updatedAt: Date.now()
         }));
         await db.beats.bulkAdd(rows);
+        if (plan.source === 'ai' && window.Preferences && typeof window.Preferences.trackPlotPlanDecision === 'function') {
+            await window.Preferences.trackPlotPlanDecision(app, { ...plan, beats: selectedCards }, 'accepted', {
+                selectedCount: selectedCards.length
+            });
+            if (db.plotPlans && plan.id) {
+                await db.plotPlans.update(plan.id, { status: 'accepted', ...nowPatch() });
+                app.plotPlanStatus = 'accepted';
+                await loadPlans(app);
+            }
+        }
         if (window.Beats && typeof window.Beats.loadBeats === 'function') {
             await window.Beats.loadBeats(app);
         }
         return rows;
+    }
+
+    async function recordPlotPlanDecision(app, decision) {
+        if (!app.currentProject || !window.Preferences || typeof window.Preferences.trackPlotPlanDecision !== 'function') return null;
+        if (decision !== 'accepted' && decision !== 'rejected') return null;
+        let plan = planFromState(app);
+        if (!plan.id) {
+            plan = await savePlan(app);
+        }
+        const nextStatus = decision === 'accepted' ? 'accepted' : 'archived';
+        if (db.plotPlans && plan.id) {
+            await db.plotPlans.update(plan.id, { status: nextStatus, ...nowPatch() });
+            plan.status = nextStatus;
+        }
+        app.plotPlanStatus = nextStatus;
+        const event = await window.Preferences.trackPlotPlanDecision(app, plan, decision, {
+            selectedCount: (plan.beats || []).filter(card => card.selected !== false).length
+        });
+        await loadPlans(app);
+        return event;
     }
 
     async function getSelectedTemplate(app) {
@@ -351,6 +381,17 @@
         };
     }
 
+    function preferenceSummaryForTask(app, task) {
+        const summary = app && app.preferenceRequestSummary;
+        if (!summary || (summary.task && summary.task !== task)) return null;
+        if (!summary.text && (!summary.explicit || Object.keys(summary.explicit).length === 0) && !summary.learned) return null;
+        return {
+            explicit: summary.explicit || {},
+            learned: summary.learned || {},
+            text: summary.text || ''
+        };
+    }
+
     function buildPlotGenerationMessages(app, template) {
         const templatePayload = templateForPrompt(template);
         const userInputs = {
@@ -362,6 +403,21 @@
             tone: asString(app.plotPlanTone || ''),
             medium: MEDIUMS.has(app.plotPlanMedium) ? app.plotPlanMedium : (templatePayload.medium || 'novel')
         };
+        const preferenceSummary = preferenceSummaryForTask(app, 'plot.generate');
+        const userContent = [
+            'Generate a draft plot plan from this normalized beat template and user brief.',
+            '',
+            'Required output object fields: templateId, name, premise, genre, targetLength, tone, medium, source, beats.',
+            'Each beat must include: slotId, slotTitle, title, summary. Optional fields: characterArc, conflict, sceneIdeas, openQuestions, tags.',
+            'Set source to "ai" and status to "draft" if you include status.',
+            '',
+            `Template JSON:\n${JSON.stringify(templatePayload, null, 2)}`,
+            '',
+            `User inputs JSON:\n${JSON.stringify(userInputs, null, 2)}`
+        ];
+        if (preferenceSummary) {
+            userContent.push('', `Local preference summary JSON:\n${JSON.stringify(preferenceSummary, null, 2)}`);
+        }
 
         return [
             {
@@ -376,17 +432,7 @@
             },
             {
                 role: 'user',
-                content: [
-                    'Generate a draft plot plan from this normalized beat template and user brief.',
-                    '',
-                    'Required output object fields: templateId, name, premise, genre, targetLength, tone, medium, source, beats.',
-                    'Each beat must include: slotId, slotTitle, title, summary. Optional fields: characterArc, conflict, sceneIdeas, openQuestions, tags.',
-                    'Set source to "ai" and status to "draft" if you include status.',
-                    '',
-                    `Template JSON:\n${JSON.stringify(templatePayload, null, 2)}`,
-                    '',
-                    `User inputs JSON:\n${JSON.stringify(userInputs, null, 2)}`
-                ].join('\n')
+                content: userContent.join('\n')
             }
         ];
     }
@@ -417,7 +463,9 @@
             metadata: {
                 source: 'plot-planning-panel',
                 saveRun: true,
-                templateSlotCount: templatePayload.slots.length
+                templateSlotCount: templatePayload.slots.length,
+                preferenceSummaryChars: asString(preferenceSummaryForTask(app, 'plot.generate')?.text || '').length,
+                tuningEventCount: preferenceSummaryForTask(app, 'plot.generate')?.learned?.recentEvents?.length || 0
             }
         });
     }
@@ -432,7 +480,9 @@
             genreSet: Boolean(app.plotPlanGenre),
             targetLengthSet: Boolean(app.plotPlanTargetLength),
             toneSet: Boolean(app.plotPlanTone),
-            medium: app.plotPlanMedium || templatePayload.medium || 'novel'
+            medium: app.plotPlanMedium || templatePayload.medium || 'novel',
+            preferenceSummaryChars: asString(preferenceSummaryForTask(app, 'plot.generate')?.text || '').length,
+            tuningEventCount: preferenceSummaryForTask(app, 'plot.generate')?.learned?.recentEvents?.length || 0
         };
     }
 
@@ -519,6 +569,9 @@
             }
 
             const settings = window.AIContracts.normalizeSettings(options.settings || window.AIContracts.settingsFromApp(app));
+            if (window.Preferences && typeof window.Preferences.prepareRequestContext === 'function') {
+                await window.Preferences.prepareRequestContext(app, 'plot.generate');
+            }
             const request = buildPlotGenerationRequest(app, template, settings);
             aiRun = await createAiRun(app, template, request, settings);
             const result = await window.AIOrchestrator.run(request, settings, options.callbacks || {});
@@ -625,6 +678,7 @@
         savePlan,
         deletePlan,
         saveSelectedAsBeats,
+        recordPlotPlanDecision,
         generatePlotPlan,
         normalizePlotPlan,
         normalizeBeatCard,
@@ -639,7 +693,8 @@
             buildPlotGenerationMessages,
             buildPlotGenerationRequest,
             normalizeGeneratedPlotPlan,
-            summarizeRequest
+            summarizeRequest,
+            preferenceSummaryForTask
         }
     };
 })();

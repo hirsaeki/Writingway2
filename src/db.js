@@ -463,6 +463,28 @@ db.version(13).stores({
     // New tables only. Existing project/scene/beat data is left untouched.
 });
 
+// Local preference tuning records (v14). This stores only user-facing preferences
+// and compact accept/reject events; it does not call provider fine-tuning APIs.
+db.version(14).stores({
+    projects: 'id, name, created, modified, updatedAt',
+    chapters: 'id, projectId, title, order, created, modified, updatedAt',
+    scenes: 'id, projectId, chapterId, title, order, created, modified, updatedAt',
+    content: 'sceneId, text, wordCount, updatedAt',
+    prompts: 'id, projectId, category, title, created, modified, updatedAt',
+    codex: 'id, projectId, title, created, modified, updatedAt',
+    compendium: 'id, [projectId+category], projectId, category, title, modified, tags, updatedAt',
+    promptHistory: 'id, projectId, sceneId, timestamp, beat, prompt',
+    workshopSessions: 'id, projectId, name, createdAt, updatedAt',
+    beats: 'id, projectId, chapterId, sceneId, scope, order, status, templateId, templateSlotId, modified',
+    beatTemplates: 'id, name, builtIn, modified',
+    plotPlans: 'id, projectId, templateId, status, created, modified, updatedAt',
+    aiRuns: 'id, projectId, task, provider, model, status, created, updatedAt',
+    userPreferences: 'id, scope, projectId, key, updatedAt',
+    tuningEvents: 'id, projectId, task, source, decision, targetType, targetId, created, updatedAt'
+}).upgrade(async tx => {
+    // New tables only. Existing user data is left untouched.
+});
+
 // Expose the global Dexie instance for debugging and console usage
 try { window.db = window.db || db; } catch (e) { /* ignore in non-browser env */ }
 

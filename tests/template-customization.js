@@ -23,7 +23,7 @@ const path = require('path');
         const result = await page.evaluate(async () => {
             await db.delete();
             await db.open();
-            if (db.verno !== 13) throw new Error(`expected Dexie v13, got v${db.verno}`);
+            if (db.verno !== 14) throw new Error(`expected Dexie v14, got v${db.verno}`);
 
             const project = { id: 'p-template-customization', name: 'Template Customization', created: new Date(), modified: new Date() };
             await db.projects.add(project);

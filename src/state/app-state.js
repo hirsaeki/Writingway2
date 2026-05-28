@@ -20,6 +20,7 @@ function createAppState() {
         exportIncludeSceneTitles: true, // Include scene titles in export (not applicable to ZIP)
         showAISettings: false,
         showDataManagement: false,
+        showPreferencesPanel: false,
         showBeatsPanel: false,
         showPromptsPanel: false,
         showPromptHistory: false,
@@ -177,6 +178,18 @@ function createAppState() {
         plotPlanIsGenerating: false,
         plotPlanGenerationError: '',
         plotPlanLastAiRunId: '',
+
+        // ========== Local Preference Tuning ==========
+        preferenceRows: [],
+        tuningEvents: [],
+        preferenceBeatDensity: 'balanced',
+        preferencePlotGuidance: '',
+        preferenceTemplateDetail: 'balanced',
+        preferenceTemplateGuidance: '',
+        preferenceDefaultTone: '',
+        preferenceSummaryText: '',
+        preferenceRequestSummary: null,
+        preferenceIsSaving: false,
 
         // ========== Scene Generation Options ==========
         showSceneOptions: false,
