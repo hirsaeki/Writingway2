@@ -41,7 +41,11 @@
         return null;
     }
 
-    function downloadJson(filename, envelope) {
+    async function downloadJson(filename, envelope) {
+        if (window.PlatformAdapter && typeof window.PlatformAdapter.downloadJson === 'function') {
+            await window.PlatformAdapter.downloadJson(filename, envelope);
+            return;
+        }
         const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -386,7 +390,7 @@
         async exportAllData(app) {
             try {
                 const envelope = makeEnvelope('all', await collectAllData());
-                downloadJson(`writingway2_all_${Date.now()}.json`, envelope);
+                await downloadJson(`writingway2_all_${Date.now()}.json`, envelope);
             } catch (error) {
                 alert(tr(app, 'alerts.dataExportFailed', { error: error.message || error }));
             }
@@ -400,7 +404,7 @@
                 }
                 const data = await collectProjectData(app.currentProject.id);
                 const envelope = makeEnvelope('project', data);
-                downloadJson(`writingway2_project_${safeName(app.currentProject.name)}_${Date.now()}.json`, envelope);
+                await downloadJson(`writingway2_project_${safeName(app.currentProject.name)}_${Date.now()}.json`, envelope);
             } catch (error) {
                 alert(tr(app, 'alerts.dataExportFailed', { error: error.message || error }));
             }
@@ -448,7 +452,8 @@
             normalizePlotPlans,
             normalizeAiRuns,
             normalizeUserPreferences,
-            normalizeTuningEvents
+            normalizeTuningEvents,
+            downloadJson
         }
     };
 

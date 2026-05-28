@@ -184,12 +184,18 @@
                 }))
             };
             
-            // Create and download JSON file
+            const filename = `${app.currentProject.name.replace(/[^a-z0-9]/gi, '_')}_prompts.json`;
+            if (window.PlatformAdapter && typeof window.PlatformAdapter.downloadJson === 'function') {
+                await window.PlatformAdapter.downloadJson(filename, exportData);
+                return;
+            }
+
+            // Fallback for older entry points that may not load the platform adapter.
             const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${app.currentProject.name.replace(/[^a-z0-9]/gi, '_')}_prompts.json`;
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

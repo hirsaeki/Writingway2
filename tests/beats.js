@@ -10,7 +10,7 @@ const path = require('path');
 
     try {
         await page.goto(fileUrl, { waitUntil: 'load', timeout: 15000 });
-        await page.waitForFunction(() => window.Beats && window.DataManagement && window.db, { timeout: 5000 });
+        await page.waitForFunction(() => window.Beats && window.DataManagement && window.PlatformAdapter && window.db, { timeout: 5000 });
 
         const result = await page.evaluate(async () => {
             await db.delete();
@@ -101,6 +101,20 @@ const path = require('path');
             const exportEnvelope = window.Beats._test.makeTemplateEnvelope(customTemplate);
             if (exportEnvelope.version !== 2 || exportEnvelope.template.version !== 2 || exportEnvelope.template.slots.some(slot => typeof slot !== 'object')) {
                 throw new Error('template export did not default to v2');
+            }
+            const originalDownloadJson = window.PlatformAdapter.downloadJson;
+            const downloads = [];
+            window.PlatformAdapter.downloadJson = async (filename, data) => {
+                downloads.push({ filename, data });
+            };
+            try {
+                app.selectedBeatTemplateId = customTemplate.id;
+                await window.Beats.exportTemplate(app);
+            } finally {
+                window.PlatformAdapter.downloadJson = originalDownloadJson;
+            }
+            if (downloads.length !== 1 || !downloads[0].filename.includes('Custom_beat_template.json') || downloads[0].data.template.version !== 2) {
+                throw new Error('template JSON export should route through PlatformAdapter');
             }
 
             const v1File = new File([JSON.stringify({

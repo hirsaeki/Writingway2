@@ -11,7 +11,7 @@ const path = require('path');
 
     try {
         await page.goto(fileUrl, { waitUntil: 'load', timeout: 15000 });
-        await page.waitForFunction(() => window.DataManagement && window.DataManagement._test && window.db, { timeout: 5000 });
+        await page.waitForFunction(() => window.DataManagement && window.DataManagement._test && window.PlatformAdapter && window.db, { timeout: 5000 });
 
         const result = await page.evaluate(async () => {
             await db.delete();
@@ -187,6 +187,32 @@ const path = require('path');
             }
             if (importedEvents[0].plotPlanId !== importedPlans[0].id || importedEvents[0].targetId !== importedPlans[0].id) {
                 throw new Error('persisted project import should keep remapped tuning event references');
+            }
+
+            const originalDownloadJson = window.PlatformAdapter.downloadJson;
+            const downloads = [];
+            window.PlatformAdapter.downloadJson = async (filename, data) => {
+                downloads.push({ filename, data });
+            };
+            try {
+                await window.DataManagement.exportCurrentProject({
+                    currentProject: p1,
+                    t(key) { return key; }
+                });
+                await window.DataManagement.exportAllData({
+                    t(key) { return key; }
+                });
+            } finally {
+                window.PlatformAdapter.downloadJson = originalDownloadJson;
+            }
+            if (downloads.length !== 2) {
+                throw new Error('JSON exports should route through PlatformAdapter.downloadJson');
+            }
+            if (!downloads[0].filename.includes('writingway2_project_One_') || downloads[0].data.scope !== 'project') {
+                throw new Error('project JSON export did not pass the expected PlatformAdapter payload');
+            }
+            if (!downloads[1].filename.includes('writingway2_all_') || downloads[1].data.scope !== 'all') {
+                throw new Error('all-data JSON export did not pass the expected PlatformAdapter payload');
             }
 
             let rejected = false;

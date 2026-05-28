@@ -24,6 +24,30 @@ const path = require('path');
         // Wait for the app container to appear (Alpine should render it)
         await page.waitForSelector('.app-container, .welcome-screen', { timeout: 10000 });
 
+        const dependencyStatus = await page.evaluate(() => ({
+            dexie: typeof window.Dexie,
+            jszip: typeof window.JSZip,
+            platformAdapter: window.PlatformAdapter && window.PlatformAdapter.kind,
+            externalScripts: Array.from(document.scripts)
+                .map(script => script.getAttribute('src') || '')
+                .filter(src => /^https?:\/\//i.test(src))
+        }));
+        if (dependencyStatus.dexie !== 'function' || dependencyStatus.jszip !== 'function') {
+            console.error('ERROR: local Dexie/JSZip vendor scripts did not load', dependencyStatus);
+            await browser.close();
+            process.exit(2);
+        }
+        if (dependencyStatus.platformAdapter !== 'browser') {
+            console.error('ERROR: browser PlatformAdapter did not load', dependencyStatus);
+            await browser.close();
+            process.exit(2);
+        }
+        if (dependencyStatus.externalScripts.length > 0) {
+            console.error('ERROR: external script dependencies found:', dependencyStatus.externalScripts);
+            await browser.close();
+            process.exit(2);
+        }
+
         // Check for generate button OR welcome screen (app may open with no project)
         const gen = await page.$('.generate-btn');
         const welcome = await page.$('.welcome-screen');

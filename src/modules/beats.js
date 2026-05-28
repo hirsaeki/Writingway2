@@ -289,11 +289,16 @@
         const template = app.selectedBeatTemplateId ? await db.beatTemplates.get(app.selectedBeatTemplateId) : null;
         if (!template) return;
         const envelope = makeTemplateEnvelope(template);
+        const filename = `${envelope.template.name.replace(/[^a-z0-9_-]+/gi, '_')}_beat_template.json`;
+        if (window.PlatformAdapter && typeof window.PlatformAdapter.downloadJson === 'function') {
+            await window.PlatformAdapter.downloadJson(filename, envelope);
+            return;
+        }
         const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${envelope.template.name.replace(/[^a-z0-9_-]+/gi, '_')}_beat_template.json`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         a.remove();
