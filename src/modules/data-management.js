@@ -62,6 +62,15 @@
         return JSON.parse(await file.text());
     }
 
+    async function readJsonInput(eventOrFile) {
+        const file = getFile(eventOrFile);
+        if (file) return readJsonFile(file);
+        if (!eventOrFile && window.PlatformAdapter && typeof window.PlatformAdapter.openJsonFile === 'function') {
+            return window.PlatformAdapter.openJsonFile();
+        }
+        throw new Error('No file selected.');
+    }
+
     function assertEnvelope(envelope, expectedScope) {
         if (!envelope || envelope.format !== FORMAT) {
             throw new Error('Unsupported backup format.');
@@ -412,13 +421,14 @@
 
         async importAllData(app, eventOrFile) {
             try {
-                const file = getFile(eventOrFile);
-                const envelope = await readJsonFile(file);
+                const envelope = await readJsonInput(eventOrFile);
+                if (!envelope) return null;
                 assertEnvelope(envelope, 'all');
                 if (!confirm(tr(app, 'alerts.importAllDataConfirm'))) return;
                 await replaceAllData(envelope.data);
                 await refreshApp(app);
                 alert(tr(app, 'alerts.importAllDataSuccess'));
+                return true;
             } catch (error) {
                 alert(tr(app, 'alerts.dataImportFailed', { error: error.message || error }));
             }
@@ -426,12 +436,13 @@
 
         async importProject(app, eventOrFile) {
             try {
-                const file = getFile(eventOrFile);
-                const envelope = await readJsonFile(file);
+                const envelope = await readJsonInput(eventOrFile);
+                if (!envelope) return null;
                 assertEnvelope(envelope, 'project');
                 const projectId = await addProjectData(envelope.data);
                 await refreshApp(app, projectId);
                 alert(tr(app, 'alerts.importProjectJsonSuccess'));
+                return projectId;
             } catch (error) {
                 alert(tr(app, 'alerts.dataImportFailed', { error: error.message || error }));
             }
@@ -448,6 +459,7 @@
             remapProjectData,
             replaceAllData,
             addProjectData,
+            readJsonInput,
             normalizeBeatTemplates,
             normalizePlotPlans,
             normalizeAiRuns,

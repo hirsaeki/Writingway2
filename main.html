@@ -1592,7 +1592,7 @@
                         <button class="btn btn-secondary" @click="exportAllDataJson()">
                             <span x-text="t('dataManagement.exportAll')"></span>
                         </button>
-                        <button class="btn btn-secondary" @click="document.getElementById('importAllDataJsonInput').click()">
+                        <button class="btn btn-secondary" @click="importAllDataJson()">
                             <span x-text="t('dataManagement.importAll')"></span>
                         </button>
                         <input type="file" id="importAllDataJsonInput" accept=".json,application/json"
@@ -1606,7 +1606,7 @@
                         <button class="btn btn-secondary" @click="exportCurrentProjectJson()" :disabled="!currentProject">
                             <span x-text="t('dataManagement.exportCurrentProject')"></span>
                         </button>
-                        <button class="btn btn-secondary" @click="document.getElementById('importProjectJsonInput').click()">
+                        <button class="btn btn-secondary" @click="importProjectJson()">
                             <span x-text="t('dataManagement.importProject')"></span>
                         </button>
                         <input type="file" id="importProjectJsonInput" accept=".json,application/json"

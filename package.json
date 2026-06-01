@@ -3,6 +3,11 @@
     "version": "1.0.0",
     "private": true,
     "packageManager": "pnpm@11.2.2",
+    "dependencies": {
+        "@tauri-apps/api": "^2.11.0",
+        "@tauri-apps/plugin-dialog": "^2.7.1",
+        "@tauri-apps/plugin-fs": "^2.5.1"
+    },
     "devDependencies": {
         "@tauri-apps/cli": "^2.0.0",
         "eslint": "^8.45.0",

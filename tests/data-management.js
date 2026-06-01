@@ -215,6 +215,131 @@ const path = require('path');
                 throw new Error('all-data JSON export did not pass the expected PlatformAdapter payload');
             }
 
+            const previousTauri = window.__TAURI__;
+            const previousTauriIpc = window.__TAURI_IPC__;
+            const nativeWrites = [];
+            let saveOptions = null;
+            let openOptions = null;
+            window.__TAURI__ = {
+                core: {
+                    invoke: async (command, args, options) => {
+                        if (command === 'plugin:dialog|save') {
+                            saveOptions = args.options;
+                            return '/tmp/writingway-native-export.json';
+                        }
+                        if (command === 'plugin:dialog|open') {
+                            openOptions = args.options;
+                            return '/tmp/writingway-native-import.json';
+                        }
+                        if (command === 'plugin:fs|write_text_file') {
+                            nativeWrites.push({
+                                filePath: decodeURIComponent(options.headers.path),
+                                contents: new TextDecoder().decode(args)
+                            });
+                            return null;
+                        }
+                        if (command === 'plugin:fs|read_text_file') {
+                            if (args.path !== '/tmp/writingway-native-import.json') {
+                                throw new Error('native import used the wrong path');
+                            }
+                            return new TextEncoder().encode(JSON.stringify(projectEnvelope));
+                        }
+                        throw new Error(`unexpected native command ${command}`);
+                    }
+                },
+                dialog: null,
+                fs: null
+            };
+            try {
+                if (window.PlatformAdapter.kind !== 'tauri' || !window.PlatformAdapter.hasTauriFileApi()) {
+                    throw new Error('mock Tauri native file APIs were not detected');
+                }
+                const nativeSave = await window.PlatformAdapter.downloadJson('Native Export?.json', { ok: true });
+                if (!nativeSave || nativeSave.path !== '/tmp/writingway-native-export.json') {
+                    throw new Error('native JSON export did not return the saved path');
+                }
+                if (!saveOptions || saveOptions.filters[0].extensions[0] !== 'json' || nativeWrites.length !== 1 || !nativeWrites[0].contents.includes('"ok": true')) {
+                    throw new Error('native JSON export did not use save dialog and text write');
+                }
+                const nativeEnvelope = await window.PlatformAdapter.openJsonFile();
+                if (!nativeEnvelope || nativeEnvelope.scope !== 'project' || !openOptions || openOptions.filters[0].extensions[0] !== 'json') {
+                    throw new Error('native JSON import did not use open dialog and text read');
+                }
+                const adapterEnvelope = await dm.readJsonInput();
+                if (!adapterEnvelope || adapterEnvelope.scope !== 'project') {
+                    throw new Error('Data Management did not use PlatformAdapter for native import');
+                }
+            } finally {
+                if (previousTauri === undefined) {
+                    delete window.__TAURI__;
+                } else {
+                    window.__TAURI__ = previousTauri;
+                }
+                if (previousTauriIpc === undefined) {
+                    delete window.__TAURI_IPC__;
+                } else {
+                    window.__TAURI_IPC__ = previousTauriIpc;
+                }
+            }
+
+            nativeWrites.length = 0;
+            saveOptions = null;
+            openOptions = null;
+            window.__TAURI__ = {
+                dialog: {
+                    save: async (options) => {
+                        saveOptions = options;
+                        return '/tmp/writingway-native-export.json';
+                    },
+                    open: async (options) => {
+                        openOptions = options;
+                        return '/tmp/writingway-native-import.json';
+                    }
+                },
+                fs: {
+                    writeTextFile: async (filePath, contents) => {
+                        nativeWrites.push({ filePath, contents });
+                    },
+                    readTextFile: async (filePath) => {
+                        if (filePath !== '/tmp/writingway-native-import.json') {
+                            throw new Error('native import used the wrong path');
+                        }
+                        return JSON.stringify(projectEnvelope);
+                    }
+                }
+            };
+            try {
+                if (window.PlatformAdapter.kind !== 'tauri' || !window.PlatformAdapter.hasTauriFileApi()) {
+                    throw new Error('mock Tauri native file APIs were not detected');
+                }
+                const nativeSave = await window.PlatformAdapter.downloadJson('Native Export?.json', { ok: true });
+                if (!nativeSave || nativeSave.path !== '/tmp/writingway-native-export.json') {
+                    throw new Error('native JSON export did not return the saved path');
+                }
+                if (!saveOptions || saveOptions.filters[0].extensions[0] !== 'json' || nativeWrites.length !== 1 || !nativeWrites[0].contents.includes('"ok": true')) {
+                    throw new Error('native JSON export did not use save dialog and text write');
+                }
+                const nativeEnvelope = await window.PlatformAdapter.openJsonFile();
+                if (!nativeEnvelope || nativeEnvelope.scope !== 'project' || !openOptions || openOptions.filters[0].extensions[0] !== 'json') {
+                    throw new Error('native JSON import did not use open dialog and text read');
+                }
+                const adapterEnvelope = await dm.readJsonInput();
+                if (!adapterEnvelope || adapterEnvelope.scope !== 'project') {
+                    throw new Error('Data Management did not use PlatformAdapter for native import');
+                }
+            } finally {
+                if (previousTauri === undefined) {
+                    delete window.__TAURI__;
+                } else {
+                    window.__TAURI__ = previousTauri;
+                }
+                if (previousTauriIpc === undefined) {
+                    delete window.__TAURI_IPC__;
+                } else {
+                    window.__TAURI_IPC__ = previousTauriIpc;
+                }
+            }
+
             let rejected = false;
             try {
                 dm.assertEnvelope({ format: 'wrong', version: 1, scope: 'all', data: {} }, 'all');

@@ -15,4 +15,11 @@ pnpm run tauri:dev
 pnpm run tauri:build
 ```
 
-Storage remains Dexie/IndexedDB in this phase. SQLite, native file dialogs, secure key storage, and local model sidecars are intentionally deferred.
+Storage remains Dexie/IndexedDB in this phase. SQLite, secure key storage, and local model sidecars are intentionally deferred.
+
+Native JSON backup export/import uses only:
+
+- dialog `open` / `save`
+- filesystem `readTextFile` / `writeTextFile`
+
+Do not add broader filesystem, shell, sidecar, updater, or SQL permissions unless a later hardening subphase explicitly needs them.
