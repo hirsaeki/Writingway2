@@ -1234,6 +1234,9 @@
                             <span x-text="t('ai.apiKey')"></span></label>
                         <input type="password" x-model="aiApiKey" :placeholder="t('ai.apiKeyPlaceholder')"
                             style="width:100%;padding:8px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);border-radius:6px;">
+                        <p x-show="window.PlatformAdapter && window.PlatformAdapter.kind === 'tauri'"
+                            style="font-size:11px;color:var(--text-secondary);margin:4px 0 0 0;"
+                            x-text="t('ai.secureStorageActive')"></p>
                         <p style="font-size:11px;color:var(--text-secondary);margin:4px 0 0 0;">
                             <template x-if="aiProvider === 'openrouter'"><span><span x-text="t('ai.getFreeKeyAt')"></span> <a
                                     href="https://openrouter.ai/keys" target="_blank"

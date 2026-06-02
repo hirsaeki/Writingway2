@@ -72,9 +72,19 @@
         );
     }
 
+    function hasTauriSecretApi() {
+        return Boolean(isTauri() && canTauriInvoke());
+    }
+
     function safeFilename(filename, fallback) {
         const name = String(filename || fallback || 'writingway-export.json').trim();
         return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_') || fallback || 'writingway-export.json';
+    }
+
+    function normalizeSecretKey(key) {
+        const normalized = String(key || '').trim();
+        if (!normalized) throw new Error('Secret key is required.');
+        return normalized;
     }
 
     function translate(key, fallback) {
@@ -152,15 +162,29 @@
     }
 
     async function saveSecret(key, value) {
-        localStorage.setItem(`writingway:secret:${key}`, String(value || ''));
+        const secretKey = normalizeSecretKey(key);
+        const secretValue = String(value || '');
+        if (hasTauriSecretApi()) {
+            if (!secretValue) return invoke('writingway2_delete_secret', { key: secretKey });
+            return invoke('writingway2_save_secret', { key: secretKey, value: secretValue });
+        }
+        localStorage.setItem(`writingway:secret:${secretKey}`, secretValue);
     }
 
     async function loadSecret(key) {
-        return localStorage.getItem(`writingway:secret:${key}`) || '';
+        const secretKey = normalizeSecretKey(key);
+        if (hasTauriSecretApi()) {
+            return invoke('writingway2_load_secret', { key: secretKey });
+        }
+        return localStorage.getItem(`writingway:secret:${secretKey}`) || '';
     }
 
     async function deleteSecret(key) {
-        localStorage.removeItem(`writingway:secret:${key}`);
+        const secretKey = normalizeSecretKey(key);
+        if (hasTauriSecretApi()) {
+            return invoke('writingway2_delete_secret', { key: secretKey });
+        }
+        localStorage.removeItem(`writingway:secret:${secretKey}`);
     }
 
     async function invoke(command, payload) {
@@ -182,6 +206,7 @@
             },
             isTauri,
             hasTauriFileApi,
+            hasTauriSecretApi,
             downloadBlob,
             downloadJson,
             openJsonFile,
@@ -196,6 +221,8 @@
                 tauriInvoke,
                 tauriDialog,
                 tauriFs,
+                hasTauriSecretApi,
+                normalizeSecretKey,
                 translate,
                 safeFilename
             }

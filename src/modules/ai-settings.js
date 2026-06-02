@@ -1,7 +1,78 @@
 // AI Settings Module
 // Handles AI configuration: provider selection, model fetching, settings persistence, connection testing
 (function () {
+    const SETTINGS_KEY = 'writingway:aiSettings';
+    const API_KEY_SECRET_KEY = 'ai.apiKey';
     const tr = (app, key, params, fallback) => app && typeof app.t === 'function' ? app.t(key, params, fallback) : (window.t ? window.t(key, params, fallback) : (fallback || key));
+    let persistQueue = Promise.resolve();
+
+    function settingsFromApp(app) {
+        return {
+            mode: app.aiMode,
+            provider: app.aiProvider,
+            model: app.aiModel,
+            endpoint: app.aiEndpoint || (app.aiMode === 'local' ? 'http://localhost:8080' : ''),
+            temperature: app.temperature,
+            maxTokens: app.maxTokens,
+            useProviderDefaults: app.useProviderDefaults || false,
+            forceNonStreaming: app.forceNonStreaming || false
+        };
+    }
+
+    function sanitizeSettings(settings) {
+        const sanitized = Object.assign({}, settings || {});
+        delete sanitized.apiKey;
+        delete sanitized.aiApiKey;
+        return sanitized;
+    }
+
+    async function saveApiKeySecret(apiKey) {
+        const adapter = window.PlatformAdapter;
+        if (!adapter || typeof adapter.saveSecret !== 'function' || typeof adapter.deleteSecret !== 'function') return;
+        const value = String(apiKey || '');
+        if (value) {
+            await adapter.saveSecret(API_KEY_SECRET_KEY, value);
+        } else {
+            await adapter.deleteSecret(API_KEY_SECRET_KEY);
+        }
+    }
+
+    async function loadApiKeySecret() {
+        const adapter = window.PlatformAdapter;
+        if (!adapter || typeof adapter.loadSecret !== 'function') return '';
+        return await adapter.loadSecret(API_KEY_SECRET_KEY);
+    }
+
+    async function persistAISettings(app) {
+        const settings = settingsFromApp(app);
+        const apiKey = app.aiApiKey;
+        persistQueue = persistQueue.catch(() => {}).then(async () => {
+            await saveApiKeySecret(apiKey);
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        });
+        return persistQueue;
+    }
+
+    async function loadStoredApiKey(settings) {
+        let secret = '';
+        try {
+            secret = await loadApiKeySecret();
+        } catch (error) {
+            console.warn('Native secret storage is unavailable:', error.message || error);
+        }
+        if (secret) return secret;
+
+        const legacyKey = settings && (settings.apiKey || settings.aiApiKey || '');
+        if (!legacyKey) return '';
+
+        try {
+            await saveApiKeySecret(legacyKey);
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(sanitizeSettings(settings)));
+        } catch (error) {
+            console.warn('Could not migrate legacy API key to secret storage:', error.message || error);
+        }
+        return legacyKey;
+    }
 
     const AISettings = {
         /**
@@ -138,22 +209,11 @@
          * Quick save for generation parameters (no validation/testing)
          * @param {Object} app - Alpine app instance
          */
-        saveGenerationParams(app) {
+        async saveGenerationParams(app) {
             try {
-                const settings = {
-                    mode: app.aiMode,
-                    provider: app.aiProvider,
-                    apiKey: app.aiApiKey,
-                    model: app.aiModel,
-                    endpoint: app.aiEndpoint || (app.aiMode === 'local' ? 'http://localhost:8080' : ''),
-                    temperature: app.temperature,
-                    maxTokens: app.maxTokens,
-                    useProviderDefaults: app.useProviderDefaults || false,
-                    forceNonStreaming: app.forceNonStreaming || false
-                };
-                localStorage.setItem('writingway:aiSettings', JSON.stringify(settings));
+                await persistAISettings(app);
             } catch (e) {
-                console.error('Failed to save generation params:', e);
+                console.error('Failed to save generation params:', e.message || e);
             }
         },
 
@@ -163,19 +223,7 @@
          */
         async saveAISettings(app) {
             try {
-                // Save settings to localStorage
-                const settings = {
-                    mode: app.aiMode,
-                    provider: app.aiProvider,
-                    apiKey: app.aiApiKey,
-                    model: app.aiModel,
-                    endpoint: app.aiEndpoint || (app.aiMode === 'local' ? 'http://localhost:8080' : ''),
-                    temperature: app.temperature,
-                    maxTokens: app.maxTokens,
-                    useProviderDefaults: app.useProviderDefaults || false,
-                    forceNonStreaming: app.forceNonStreaming || false
-                };
-                localStorage.setItem('writingway:aiSettings', JSON.stringify(settings));
+                await persistAISettings(app);
 
                 // Test connection
                 app.showModelLoading = true;
@@ -320,12 +368,13 @@
          */
         async loadAISettings(app) {
             try {
-                const saved = localStorage.getItem('writingway:aiSettings');
+                const saved = localStorage.getItem(SETTINGS_KEY);
                 if (saved) {
-                    const settings = JSON.parse(saved);
+                    const rawSettings = JSON.parse(saved);
+                    const settings = sanitizeSettings(rawSettings);
                     app.aiMode = settings.mode || 'local';
                     app.aiProvider = settings.provider || 'anthropic';
-                    app.aiApiKey = settings.apiKey || '';
+                    app.aiApiKey = await loadStoredApiKey(rawSettings);
                     const savedModel = settings.model || '';
                     app.aiEndpoint = settings.endpoint || '';
                     app.temperature = settings.temperature || 0.8;
@@ -353,4 +402,12 @@
     // Expose test helpers
     window.__test = window.__test || {};
     window.__test.AISettings = AISettings;
+    window.__test.AISettingsStorage = {
+        SETTINGS_KEY,
+        API_KEY_SECRET_KEY,
+        settingsFromApp,
+        sanitizeSettings,
+        persistAISettings,
+        loadStoredApiKey
+    };
 })();
