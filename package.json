@@ -19,7 +19,7 @@
         "tauri:prep": "node scripts/prepare-tauri-dist.js",
         "tauri:dev": "tauri dev",
         "tauri:build": "tauri build",
-        "unit": "node tests/gen-buildPrompt.js && node tests/ai-settings-secrets.js",
+        "unit": "node tests/gen-buildPrompt.js && node tests/ai-gateway.js && node tests/ai-settings-secrets.js && node tests/ai-tauri-proxy.js",
         "ui": "node tests/ui-generation.js && node tests/ui-generation-retry.js && node tests/ui-move-scene.js && node tests/ui-sidebar.js",
         "test": "pnpm run smoke && pnpm run unit && pnpm run ui"
     }

@@ -1,0 +1,5 @@
+identifier = "ai-proxy"
+description = "Allow the main window to send OpenAI-compatible chat completion requests through the native AI proxy."
+commands.allow = [
+  "writingway2_ai_chat_completion"
+]

@@ -1,6 +1,7 @@
 // OpenAI-compatible Chat Completions provider adapter.
 (function () {
     const ADAPTER_ID = 'openai-chat-compatible';
+    const TAURI_PROXY_PROVIDERS = new Set(['openai', 'openrouter', 'nanogpt', 'custom']);
 
     function tr(key, params, fallback) {
         return window.t ? window.t(key, params, fallback) : (fallback || key);
@@ -78,6 +79,54 @@
         }
 
         return headers;
+    }
+
+    function proxySafeHeaders(headers) {
+        const safe = {};
+        for (const [name, value] of Object.entries(headers || {})) {
+            const normalized = name.toLowerCase();
+            if (normalized === 'http-referer' || normalized === 'x-title') {
+                safe[name] = String(value || '');
+            }
+        }
+        return safe;
+    }
+
+    function shouldUseTauriProxy(payload, settings) {
+        return Boolean(
+            window.PlatformAdapter &&
+            typeof window.PlatformAdapter.hasTauriAiProxyApi === 'function' &&
+            window.PlatformAdapter.hasTauriAiProxyApi() &&
+            TAURI_PROXY_PROVIDERS.has(settings.provider) &&
+            payload.url
+        );
+    }
+
+    async function fetchThroughTauriProxy(payload) {
+        const proxyResponse = await window.PlatformAdapter.proxyAIChatCompletion({
+            provider: payload.provider,
+            url: payload.url,
+            headers: proxySafeHeaders(payload.headers),
+            body: payload.body
+        });
+        const headers = {};
+        if (proxyResponse?.contentType) headers['Content-Type'] = proxyResponse.contentType;
+        return new Response(proxyResponse?.body || '', {
+            status: proxyResponse?.status || 200,
+            statusText: proxyResponse?.statusText || '',
+            headers
+        });
+    }
+
+    async function fetchChatCompletion(payload, settings) {
+        if (shouldUseTauriProxy(payload, settings)) {
+            return fetchThroughTauriProxy(payload);
+        }
+        return fetch(payload.url, {
+            method: 'POST',
+            headers: payload.headers,
+            body: JSON.stringify(payload.body)
+        });
     }
 
     function buildPayload(aiRequest, settingsInput) {
@@ -259,11 +308,7 @@
             stream: payload.stream
         });
 
-        const response = await fetch(payload.url, {
-            method: 'POST',
-            headers: payload.headers,
-            body: JSON.stringify(payload.body)
-        });
+        const response = await fetchChatCompletion(payload, settings);
 
         if (!response.ok) {
             const error = new Error(tr(
@@ -338,6 +383,8 @@
         _test: {
             buildUrl,
             buildHeaders,
+            proxySafeHeaders,
+            shouldUseTauriProxy,
             schemaNameFor,
             normalizeLmStudioBase,
             normalizeOllamaBase,

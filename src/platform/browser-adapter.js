@@ -76,6 +76,10 @@
         return Boolean(isTauri() && canTauriInvoke());
     }
 
+    function hasTauriAiProxyApi() {
+        return Boolean(isTauri() && canTauriInvoke());
+    }
+
     function safeFilename(filename, fallback) {
         const name = String(filename || fallback || 'writingway-export.json').trim();
         return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_') || fallback || 'writingway-export.json';
@@ -187,10 +191,16 @@
         localStorage.removeItem(`writingway:secret:${secretKey}`);
     }
 
+    async function proxyAIChatCompletion(request) {
+        if (!hasTauriAiProxyApi()) {
+            throw new Error('Native AI proxy is not available in browser mode.');
+        }
+        return invoke('writingway2_ai_chat_completion', { request });
+    }
+
     async function invoke(command, payload) {
-        const result = tauriInvoke(command, payload);
-        if (result) {
-            return result;
+        if (canTauriInvoke()) {
+            return tauriInvoke(command, payload);
         }
         throw new Error('Platform invoke is not available in browser mode.');
     }
@@ -207,12 +217,14 @@
             isTauri,
             hasTauriFileApi,
             hasTauriSecretApi,
+            hasTauriAiProxyApi,
             downloadBlob,
             downloadJson,
             openJsonFile,
             saveSecret,
             loadSecret,
             deleteSecret,
+            proxyAIChatCompletion,
             invoke,
             openExternal,
             _test: {
@@ -222,6 +234,7 @@
                 tauriDialog,
                 tauriFs,
                 hasTauriSecretApi,
+                hasTauriAiProxyApi,
                 normalizeSecretKey,
                 translate,
                 safeFilename

@@ -30,4 +30,10 @@ API keys are stored through the app's `secure-secrets` permission, which allows 
 
 The renderer should call these through `PlatformAdapter.saveSecret`, `PlatformAdapter.loadSecret`, and `PlatformAdapter.deleteSecret`; do not write API keys into normal settings storage in Tauri mode.
 
-Do not add broader filesystem, shell, sidecar, updater, SQL, or AI proxy permissions unless a later hardening subphase explicitly needs them.
+OpenAI-compatible cloud generation can use the app's `ai-proxy` permission, which allows only:
+
+- `writingway2_ai_chat_completion`
+
+The renderer should call this through `PlatformAdapter.proxyAIChatCompletion`. The command reads `ai.apiKey` from native secret storage and does not accept API-key headers from the renderer.
+
+Do not add broader filesystem, shell, sidecar, updater, or SQL permissions unless a later hardening subphase explicitly needs them.
