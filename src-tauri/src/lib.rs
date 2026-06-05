@@ -1,8 +1,11 @@
 use keyring::{Entry, Error as KeyringError};
 use reqwest::header::{HeaderName, HeaderValue, CONTENT_TYPE};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::fs;
+use tauri::Manager;
 use url::Url;
 
 const SECRET_SERVICE: &str = "Writingway 2";
@@ -93,6 +96,18 @@ struct AiProxyResponse {
     status_text: String,
     content_type: String,
     body: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SqliteStorageStatus {
+    kind: String,
+    ready: bool,
+    active: bool,
+    database_name: String,
+    database_path: String,
+    existed_before_open: bool,
+    schema_version: i64,
 }
 
 fn normalize_ai_provider(provider: &str) -> Result<String, String> {
@@ -206,6 +221,35 @@ async fn writingway2_ai_chat_completion(
     })
 }
 
+#[tauri::command]
+fn writingway2_sqlite_storage_status(app: tauri::AppHandle) -> Result<SqliteStorageStatus, String> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "Could not resolve app data directory.".to_string())?;
+    fs::create_dir_all(&app_data_dir)
+        .map_err(|_| "Could not create app data directory.".to_string())?;
+
+    let database_name = "writingway2.sqlite3".to_string();
+    let database_path = app_data_dir.join(&database_name);
+    let existed_before_open = database_path.exists();
+    let connection = Connection::open(&database_path)
+        .map_err(|_| "Could not open SQLite storage database.".to_string())?;
+    let schema_version = connection
+        .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+        .map_err(|_| "Could not read SQLite storage schema version.".to_string())?;
+
+    Ok(SqliteStorageStatus {
+        kind: "sqlite".to_string(),
+        ready: true,
+        active: false,
+        database_name,
+        database_path: database_path.to_string_lossy().to_string(),
+        existed_before_open,
+        schema_version,
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -215,7 +259,8 @@ pub fn run() {
             writingway2_save_secret,
             writingway2_load_secret,
             writingway2_delete_secret,
-            writingway2_ai_chat_completion
+            writingway2_ai_chat_completion,
+            writingway2_sqlite_storage_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

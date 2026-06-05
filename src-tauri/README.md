@@ -36,4 +36,10 @@ OpenAI-compatible cloud generation can use the app's `ai-proxy` permission, whic
 
 The renderer should call this through `PlatformAdapter.proxyAIChatCompletion`. The command reads `ai.apiKey` from native secret storage and does not accept API-key headers from the renderer.
 
+SQLite readiness can use the app's `sqlite-storage` permission, which allows only:
+
+- `writingway2_sqlite_storage_status`
+
+The renderer should call this through `PlatformAdapter.getSqliteStorageStatus` or `StorageAdapter.getNativeSqliteStatus`. D1 opens the future SQLite database file in the app data directory for readiness checks only; Dexie remains the active storage backend and no app data is migrated or mirrored.
+
 Do not add broader filesystem, shell, sidecar, updater, or SQL permissions unless a later hardening subphase explicitly needs them.

@@ -142,6 +142,107 @@ Acceptance:
 - A Dexie JSON backup can import into SQLite.
 - No data loss during migration tests.
 
+#### T4 SQLite subphases
+
+SQLite work must stay incremental. Do not switch the app away from Dexie until the adapter, import path, and rollback path are tested.
+
+##### D1 — Adapter boundary and native database readiness
+
+Tasks:
+
+- Add a browser-safe `window.StorageAdapter` boundary that reports Dexie as the active storage.
+- Add a minimal Tauri command that opens or initializes the future SQLite database in the app data directory and returns status metadata.
+- Add a narrow custom capability for that command only.
+- Keep all reads and writes on Dexie.
+- Do not migrate, mirror, or copy user data.
+
+Acceptance:
+
+- Browser mode still reports Dexie storage.
+- Tauri mode can report that the native SQLite database path is available.
+- The command creates only the app data directory and SQLite file.
+- No app data is written to SQLite yet.
+
+##### D2 — SQLite schema definition
+
+Tasks:
+
+- Define SQL tables from the stabilized Dexie v14 data model.
+- Add schema version metadata and idempotent migrations.
+- Add Rust-side tests for schema creation where platform prerequisites allow.
+
+Acceptance:
+
+- SQLite schema can initialize repeatedly without data loss.
+- Table names and columns map clearly to JSON export/import records.
+- Dexie remains active storage.
+
+##### D3 — JSON import into SQLite
+
+Tasks:
+
+- Add a validated JSON backup import path into SQLite.
+- Reuse existing export/import envelopes as the source of truth.
+- Do not auto-import without user confirmation.
+
+Acceptance:
+
+- A current JSON backup can populate SQLite in tests or a manual check.
+- Invalid backup data is rejected before writes.
+- Browser export/import remains unchanged.
+
+##### D4 — Read-only SQLite inspection adapter
+
+Tasks:
+
+- Add adapter methods to read projects, chapters, scenes, templates, plot plans, and preferences from SQLite.
+- Add diagnostics to compare Dexie record counts with SQLite record counts.
+
+Acceptance:
+
+- Tauri can inspect SQLite data without switching active app storage.
+- Count mismatches are visible but do not modify Dexie.
+
+##### D5 — Opt-in Tauri storage switch
+
+Tasks:
+
+- Add an explicit user setting or guarded development flag to use SQLite in Tauri.
+- Route selected read/write paths through `StorageAdapter`.
+- Keep Dexie fallback available.
+
+Acceptance:
+
+- Browser still uses Dexie.
+- Tauri can use SQLite only after explicit opt-in.
+- Disabling the option returns to Dexie without clearing data.
+
+##### D6 — Migration and rollback workflow
+
+Tasks:
+
+- Add guided backup, import, verify, and rollback steps.
+- Require a JSON backup before switching active storage.
+- Record migration status without secrets or manuscript logs.
+
+Acceptance:
+
+- Users can back out to Dexie using the JSON backup.
+- Migration failures leave existing Dexie data untouched.
+
+##### D7 — Hardening and packaging
+
+Tasks:
+
+- Add cross-platform path checks and corruption handling.
+- Add release notes for SQLite storage state.
+- Expand automated and manual desktop verification.
+
+Acceptance:
+
+- SQLite mode is ready for real desktop release only after migration and rollback tests pass.
+- No broad filesystem or shell permissions are added.
+
 ### T5 — Optional local AI sidecar
 
 Only start after:

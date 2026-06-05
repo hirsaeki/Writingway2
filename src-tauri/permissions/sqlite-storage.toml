@@ -1,0 +1,5 @@
+identifier = "sqlite-storage"
+description = "Allow the main window to check native SQLite storage readiness."
+commands.allow = [
+  "writingway2_sqlite_storage_status"
+]

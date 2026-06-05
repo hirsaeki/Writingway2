@@ -80,6 +80,10 @@
         return Boolean(isTauri() && canTauriInvoke());
     }
 
+    function hasTauriSqliteStorageApi() {
+        return Boolean(isTauri() && canTauriInvoke());
+    }
+
     function safeFilename(filename, fallback) {
         const name = String(filename || fallback || 'writingway-export.json').trim();
         return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_') || fallback || 'writingway-export.json';
@@ -198,6 +202,13 @@
         return invoke('writingway2_ai_chat_completion', { request });
     }
 
+    async function getSqliteStorageStatus() {
+        if (!hasTauriSqliteStorageApi()) {
+            throw new Error('Native SQLite storage is not available in browser mode.');
+        }
+        return invoke('writingway2_sqlite_storage_status', {});
+    }
+
     async function invoke(command, payload) {
         if (canTauriInvoke()) {
             return tauriInvoke(command, payload);
@@ -218,6 +229,7 @@
             hasTauriFileApi,
             hasTauriSecretApi,
             hasTauriAiProxyApi,
+            hasTauriSqliteStorageApi,
             downloadBlob,
             downloadJson,
             openJsonFile,
@@ -225,6 +237,7 @@
             loadSecret,
             deleteSecret,
             proxyAIChatCompletion,
+            getSqliteStorageStatus,
             invoke,
             openExternal,
             _test: {
@@ -235,6 +248,7 @@
                 tauriFs,
                 hasTauriSecretApi,
                 hasTauriAiProxyApi,
+                hasTauriSqliteStorageApi,
                 normalizeSecretKey,
                 translate,
                 safeFilename

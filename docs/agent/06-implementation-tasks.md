@@ -394,6 +394,51 @@ Add native desktop features after the thin wrapper is stable.
 
 ---
 
+## Phase 10D — SQLite storage adapter
+
+### Goal
+
+Move toward desktop SQLite storage without replacing Dexie prematurely. JSON export/import remains the migration source of truth.
+
+### Subphases
+
+- [x] D1 — Add `StorageAdapter` boundary and native SQLite readiness/status command.
+- [ ] D2 — Define SQLite schema and idempotent native migrations.
+- [ ] D3 — Import validated JSON backups into SQLite.
+- [ ] D4 — Add read-only SQLite inspection and Dexie/SQLite diagnostics.
+- [ ] D5 — Add explicit opt-in Tauri storage switch for selected app paths.
+- [ ] D6 — Add guided migration and rollback workflow.
+- [ ] D7 — Harden corruption handling, path behavior, and packaging notes.
+
+### D1 — Adapter boundary and native database readiness
+
+Touched files:
+
+- `docs/agent/05-tauri-desktop-plan.md`
+- `docs/agent/06-implementation-tasks.md`
+- `src-tauri/*`
+- `src/platform/*`
+- `main.html`
+- Tests
+
+Tasks:
+
+- [x] Add browser-safe `window.StorageAdapter` with `kind: 'dexie'`.
+- [x] Add platform method to query native SQLite readiness in Tauri.
+- [x] Add a minimal Rust command that creates/opens the future SQLite database in the app data directory and returns metadata.
+- [x] Add one narrow custom capability for that command only.
+- [x] Keep Dexie as active storage for browser and Tauri.
+- [x] Do not copy, mirror, migrate, or save app data to SQLite.
+
+Acceptance:
+
+- [x] Browser mode still uses Dexie.
+- [x] Mocked Tauri mode can report SQLite readiness without broad permissions.
+- [x] Native command has minimal permission scope.
+- [x] Existing browser tests pass or failures are documented.
+
+---
+
 ## Final modernization acceptance
 
 - [ ] Full BS2 template exists and is usable.
